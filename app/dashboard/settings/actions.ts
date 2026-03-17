@@ -17,6 +17,12 @@ export async function updateBusinessProfile(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
+  const whatsappPhoneNumberId = String(
+    formData.get("whatsappPhoneNumberId") ?? ""
+  ).trim();
+  const whatsappBusinessAccountId = String(
+    formData.get("whatsappBusinessAccountId") ?? ""
+  ).trim();
   const vatNumber = String(formData.get("vatNumber") ?? "").trim();
   const registrationNumber = String(
     formData.get("registrationNumber") ?? ""
@@ -73,6 +79,8 @@ export async function updateBusinessProfile(formData: FormData) {
       email: email || null,
       phone: phone || null,
       address: address || null,
+      whatsappPhoneNumberId: whatsappPhoneNumberId || null,
+      whatsappBusinessAccountId: whatsappBusinessAccountId || null,
       vatNumber: vatNumber || null,
       registrationNumber: registrationNumber || null,
       bankName: bankName || null,

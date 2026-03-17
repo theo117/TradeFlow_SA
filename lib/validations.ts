@@ -8,13 +8,15 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   businessName: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(6)
+  password: z.string().min(10)
 });
 
 export const customerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
+  whatsappPhone: z.string().optional(),
+  whatsappOptIn: z.boolean().default(false),
   address: z.string().optional()
 });
 

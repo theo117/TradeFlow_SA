@@ -3,30 +3,46 @@ import { notFound } from "next/navigation";
 import { InvoiceDocument } from "@/components/dashboard/invoice-document";
 import { WhatsAppShareButton } from "@/components/dashboard/whatsapp-share-button";
 import { buttonVariants } from "@/components/ui/button";
-import { buildWhatsappInvoiceUrl, getInvoicePublicUrl } from "@/lib/invoices";
+import { validatePublicAccessToken } from "@/lib/public-access";
+import {
+  buildWhatsappInvoiceUrl,
+  getInvoicePdfUrl,
+  getInvoicePublicUrl,
+  getInvoiceWhatsappRecipient
+} from "@/lib/invoices";
 import { getPublicInvoiceById } from "@/lib/queries";
 
 export default async function PublicInvoicePage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ token?: string; expires?: string }>;
 }) {
   const { id } = await params;
+  const { token } = await searchParams;
+
+  if (!(await validatePublicAccessToken({ type: "invoice", id, token }))) {
+    notFound();
+  }
+
   const invoice = await getPublicInvoiceById(id);
 
   if (!invoice || !invoice.business || !invoice.customer) {
     notFound();
   }
 
-  const pdfHref = `/api/invoices/${invoice.id}/pdf`;
-  const whatsappHref = invoice.customer.phone
+  const pdfHref = await getInvoicePdfUrl(invoice.id, invoice.business.id);
+  const whatsappRecipient = getInvoiceWhatsappRecipient(invoice.customer);
+  const publicUrl = await getInvoicePublicUrl(invoice.id, invoice.business.id);
+  const whatsappHref = whatsappRecipient
     ? buildWhatsappInvoiceUrl({
-        phone: invoice.customer.phone,
+        phone: whatsappRecipient,
         customerName: invoice.customer.name,
         invoiceNumber: invoice.invoice_number,
         businessName: invoice.business.name,
         total: Number(invoice.total),
-        invoiceUrl: getInvoicePublicUrl(invoice.id)
+        invoiceUrl: publicUrl
       })
     : null;
 

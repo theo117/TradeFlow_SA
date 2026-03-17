@@ -4,6 +4,7 @@ import { InvoiceDocument } from "@/components/dashboard/invoice-document";
 import {
   buildWhatsappInvoiceReminderUrl,
   buildWhatsappInvoiceUrl,
+  getInvoiceWhatsappRecipient,
   getInvoicePdfUrl,
   getInvoicePublicUrl
 } from "@/lib/invoices";
@@ -23,7 +24,16 @@ export default async function InvoiceDetailPage({
   }
 
   const pdfHref = `/api/invoices/${invoice.id}/pdf`;
-  const publicUrl = getInvoicePublicUrl(invoice.id);
+  const publicUrl = await getInvoicePublicUrl(
+    invoice.id,
+    invoice.business.id,
+    invoice.business.owner_id
+  );
+  const publicPdfUrl = await getInvoicePdfUrl(
+    invoice.id,
+    invoice.business.id,
+    invoice.business.owner_id
+  );
   const emailHref = invoice.customer.email
     ? buildInvoiceEmailUrl({
         email: invoice.customer.email,
@@ -32,12 +42,13 @@ export default async function InvoiceDetailPage({
         businessName: invoice.business.name,
         total: Number(invoice.total),
         invoiceUrl: publicUrl,
-        pdfUrl: getInvoicePdfUrl(invoice.id)
+        pdfUrl: publicPdfUrl
       })
     : null;
-  const whatsappHref = invoice.customer.phone
+  const whatsappRecipient = getInvoiceWhatsappRecipient(invoice.customer);
+  const whatsappHref = whatsappRecipient
     ? buildWhatsappInvoiceUrl({
-        phone: invoice.customer.phone,
+        phone: whatsappRecipient,
         customerName: invoice.customer.name,
         invoiceNumber: invoice.invoice_number,
         businessName: invoice.business.name,
@@ -53,12 +64,12 @@ export default async function InvoiceDetailPage({
         businessName: invoice.business.name,
         total: Number(invoice.total),
         invoiceUrl: publicUrl,
-        pdfUrl: getInvoicePdfUrl(invoice.id)
+        pdfUrl: publicPdfUrl
       })
     : null;
-  const reminderWhatsappHref = invoice.customer.phone
+  const reminderWhatsappHref = whatsappRecipient
     ? buildWhatsappInvoiceReminderUrl({
-        phone: invoice.customer.phone,
+        phone: whatsappRecipient,
         customerName: invoice.customer.name,
         invoiceNumber: invoice.invoice_number,
         businessName: invoice.business.name,

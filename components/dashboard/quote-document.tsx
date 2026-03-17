@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ReactNode } from "react";
+import { WhatsAppDeliveryBadge } from "@/components/dashboard/whatsapp-delivery-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { currency, formatDate } from "@/lib/utils";
@@ -10,6 +11,7 @@ type QuoteDocumentProps = {
     status: "draft" | "sent" | "accepted";
     total: number;
     created_at: string;
+    whatsapp_delivery_status?: "queued" | "sent" | "delivered" | "read" | "failed" | null;
     items?: Array<{
       id?: string;
       service?: {
@@ -59,6 +61,7 @@ export function QuoteDocument({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={quote.status}>{quote.status}</Badge>
+          <WhatsAppDeliveryBadge status={quote.whatsapp_delivery_status} />
           {actions}
         </div>
       </div>

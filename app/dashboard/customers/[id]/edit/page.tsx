@@ -53,7 +53,23 @@ export default async function EditCustomerPage({
             <Field htmlFor="phone" label="Phone">
               <Input id="phone" name="phone" defaultValue={customer.phone ?? ""} />
             </Field>
+            <Field htmlFor="whatsappPhone" label="WhatsApp phone">
+              <Input
+                id="whatsappPhone"
+                name="whatsappPhone"
+                defaultValue={customer.whatsapp_phone ?? ""}
+              />
+            </Field>
           </div>
+          <label className="flex items-center gap-3 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              name="whatsappOptIn"
+              defaultChecked={customer.whatsapp_opt_in}
+              className="h-4 w-4 rounded border-slate-300 text-ink focus:ring-ink"
+            />
+            Customer has opted in to WhatsApp updates
+          </label>
           <Field htmlFor="address" label="Address">
             <Textarea id="address" name="address" defaultValue={customer.address ?? ""} />
           </Field>

@@ -9,6 +9,7 @@ import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { customerSchema } from "@/lib/validations";
+import { normalizeWhatsappPhone } from "@/lib/whatsapp";
 
 export async function createCustomer(formData: FormData) {
   try {
@@ -17,6 +18,8 @@ export async function createCustomer(formData: FormData) {
       name: formData.get("name"),
       email: formData.get("email"),
       phone: formData.get("phone"),
+      whatsappPhone: formData.get("whatsappPhone"),
+      whatsappOptIn: formData.get("whatsappOptIn") === "on",
       address: formData.get("address")
     });
 
@@ -25,6 +28,11 @@ export async function createCustomer(formData: FormData) {
       name: payload.name,
       email: payload.email || null,
       phone: payload.phone || null,
+      whatsappPhone:
+        payload.whatsappPhone || payload.phone
+          ? normalizeWhatsappPhone(payload.whatsappPhone || payload.phone || "")
+          : null,
+      whatsappOptIn: payload.whatsappOptIn,
       address: payload.address || null
     }).returning({ id: customers.id, name: customers.name });
 
@@ -55,6 +63,8 @@ export async function updateCustomer(customerId: string, formData: FormData) {
       name: formData.get("name"),
       email: formData.get("email"),
       phone: formData.get("phone"),
+      whatsappPhone: formData.get("whatsappPhone"),
+      whatsappOptIn: formData.get("whatsappOptIn") === "on",
       address: formData.get("address")
     });
 
@@ -64,6 +74,11 @@ export async function updateCustomer(customerId: string, formData: FormData) {
         name: payload.name,
         email: payload.email || null,
         phone: payload.phone || null,
+        whatsappPhone:
+          payload.whatsappPhone || payload.phone
+            ? normalizeWhatsappPhone(payload.whatsappPhone || payload.phone || "")
+            : null,
+        whatsappOptIn: payload.whatsappOptIn,
         address: payload.address || null
       })
       .where(

@@ -1,7 +1,9 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invoices } from "@/lib/db/schema";
-import { currency, getBaseUrl } from "@/lib/utils";
+import { getOrCreatePublicShareUrl } from "@/lib/public-access";
+import { currency } from "@/lib/utils";
+import { normalizeWhatsappPhone, resolveCustomerWhatsappPhone } from "@/lib/whatsapp";
 
 const DEFAULT_INVOICE_DUE_DAYS = 7;
 
@@ -30,26 +32,32 @@ export function getDefaultInvoiceDueDate() {
   return dueDate.toISOString().slice(0, 10);
 }
 
-export function getInvoicePublicUrl(invoiceId: string) {
-  return `${getBaseUrl()}/invoice/${invoiceId}`;
+export function getInvoicePublicUrl(
+  invoiceId: string,
+  businessId: string,
+  createdByUserId?: string | null
+) {
+  return getOrCreatePublicShareUrl({
+    type: "invoice",
+    businessId,
+    invoiceId,
+    createdByUserId,
+    path: `/invoice/${invoiceId}`
+  });
 }
 
-export function getInvoicePdfUrl(invoiceId: string) {
-  return `${getBaseUrl()}/api/invoices/${invoiceId}/pdf`;
-}
-
-export function normalizeWhatsappPhone(phone: string) {
-  const digits = phone.replace(/\D/g, "");
-
-  if (digits.startsWith("27")) {
-    return digits;
-  }
-
-  if (digits.startsWith("0")) {
-    return `27${digits.slice(1)}`;
-  }
-
-  return digits;
+export function getInvoicePdfUrl(
+  invoiceId: string,
+  businessId: string,
+  createdByUserId?: string | null
+) {
+  return getOrCreatePublicShareUrl({
+    type: "invoice-pdf",
+    businessId,
+    invoiceId,
+    createdByUserId,
+    path: `/api/invoices/${invoiceId}/pdf`
+  });
 }
 
 export function buildWhatsappInvoiceUrl({
@@ -113,4 +121,11 @@ export function buildWhatsappInvoiceReminderUrl({
   ].join("\n");
 
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+}
+
+export function getInvoiceWhatsappRecipient(customer: {
+  phone?: string | null;
+  whatsapp_phone?: string | null;
+}) {
+  return resolveCustomerWhatsappPhone(customer);
 }

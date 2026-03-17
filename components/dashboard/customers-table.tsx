@@ -22,7 +22,13 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
   const matchesSearch = useCallback(
     (customer: Customer, term: string) =>
       term.length === 0 ||
-      [customer.name, customer.email ?? "", customer.phone ?? "", customer.address ?? ""]
+      [
+        customer.name,
+        customer.email ?? "",
+        customer.phone ?? "",
+        customer.whatsapp_phone ?? "",
+        customer.address ?? ""
+      ]
         .join(" ")
         .toLowerCase()
         .includes(term),
@@ -91,7 +97,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
 
         <ListToolbar
           searchValue={search}
-          searchPlaceholder="Search by name, email, phone, or address"
+          searchPlaceholder="Search by name, email, phone, WhatsApp, or address"
           onSearchChange={setSearch}
           resultLabel={`${processedItems.length} of ${rows.length} customers`}
           onReset={resetSearch}
@@ -142,7 +148,9 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-500">{customer.email ?? "Not provided"}</td>
-                  <td className="px-6 py-4 text-slate-500">{customer.phone ?? "Not provided"}</td>
+                  <td className="px-6 py-4 text-slate-500">
+                    {customer.whatsapp_phone ?? customer.phone ?? "Not provided"}
+                  </td>
                   <td className="px-6 py-4 text-slate-500">{formatDate(customer.created_at)}</td>
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
@@ -210,7 +218,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                 </div>
                 <div className="flex items-center gap-2 text-slate-500">
                   <Phone className="h-4 w-4" />
-                  <span>{customer.phone ?? "No phone number"}</span>
+                  <span>{customer.whatsapp_phone ?? customer.phone ?? "No phone number"}</span>
                 </div>
               </div>
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { eq } from "drizzle-orm";
@@ -8,27 +9,70 @@ import { signIn, signOut } from "@/auth";
 import { normalizeRedirectTarget } from "@/lib/workflows";
 import { db } from "@/lib/db";
 import { businesses, users } from "@/lib/db/schema";
+import { logAuditEvent } from "@/lib/audit";
+import {
+  buildLoginThrottleKey,
+  clearFailedLogin,
+  isLoginBlocked,
+  recordFailedLogin
+} from "@/lib/login-rate-limit";
 import { hashPassword } from "@/lib/password";
 import { loginSchema, registerSchema } from "@/lib/validations";
 
 export async function login(formData: FormData) {
   const redirectTo = normalizeRedirectTarget(formData.get("next"));
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
 
   try {
     const payload = loginSchema.parse({
       email: formData.get("email"),
       password: formData.get("password")
     });
+    const email = payload.email.toLowerCase();
+    const throttleKey = buildLoginThrottleKey(email, ip);
+
+    if (await isLoginBlocked(throttleKey)) {
+      await logAuditEvent({
+        action: "auth.login_blocked",
+        entityType: "user",
+        entityId: email,
+        ip,
+        metadata: { email }
+      });
+      redirect("/login?error=Too%20many%20login%20attempts.%20Please%20wait%2015%20minutes.");
+    }
 
     await signIn("credentials", {
-      email: payload.email.toLowerCase(),
+      email,
       password: payload.password,
       redirectTo
+    });
+
+    await clearFailedLogin(throttleKey);
+    await logAuditEvent({
+      action: "auth.login_succeeded",
+      entityType: "user",
+      entityId: email,
+      ip,
+      metadata: { email }
     });
 
     redirect(redirectTo);
   } catch (error) {
     if (error instanceof AuthError) {
+      const email = String(formData.get("email") ?? "").trim().toLowerCase();
+      if (email) {
+        await recordFailedLogin(buildLoginThrottleKey(email, ip));
+        await logAuditEvent({
+          action: "auth.login_failed",
+          entityType: "user",
+          entityId: email,
+          ip,
+          metadata: { email }
+        });
+      }
       redirect("/login?error=Invalid%20email%20or%20password");
     }
     if (error instanceof ZodError) {
@@ -41,6 +85,9 @@ export async function login(formData: FormData) {
 
 export async function register(formData: FormData) {
   try {
+    const headerStore = await headers();
+    const forwardedFor = headerStore.get("x-forwarded-for");
+    const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
     const payload = registerSchema.parse({
       businessName: formData.get("businessName"),
       email: formData.get("email"),
@@ -74,6 +121,14 @@ export async function register(formData: FormData) {
         name: payload.businessName,
         email
       });
+    });
+
+    await logAuditEvent({
+      action: "auth.register_succeeded",
+      entityType: "user",
+      entityId: email,
+      ip,
+      metadata: { businessName: payload.businessName, email }
     });
 
     await signIn("credentials", {

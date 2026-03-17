@@ -6,12 +6,20 @@ import { eq } from "drizzle-orm";
 import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { quotes } from "@/lib/db/schema";
+import { validatePublicAccessToken } from "@/lib/public-access";
 
 export async function acceptQuote(formData: FormData) {
   const quoteId = String(formData.get("quoteId") ?? "");
+  const token = String(formData.get("token") ?? "");
+  const publicUrl = new URL(`/quote/${quoteId}`, process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
+  publicUrl.searchParams.set("token", token);
 
   if (!quoteId) {
     redirect("/dashboard/quotes?error=Quote%20not%20found");
+  }
+
+  if (!(await validatePublicAccessToken({ type: "quote", id: quoteId, token }))) {
+    redirect("/login?error=Invalid%20or%20expired%20quote%20link");
   }
 
   const [quote] = await db
@@ -26,15 +34,18 @@ export async function acceptQuote(formData: FormData) {
     .limit(1);
 
   if (!quote) {
-    redirect(`/quote/${quoteId}?error=Quote%20not%20found`);
+    publicUrl.searchParams.set("error", "Quote not found");
+    redirect(publicUrl.toString());
   }
 
   if (quote.status === "accepted") {
-    redirect(`/quote/${quoteId}?success=Quote%20already%20accepted`);
+    publicUrl.searchParams.set("success", "Quote already accepted");
+    redirect(publicUrl.toString());
   }
 
   if (quote.status !== "sent") {
-    redirect(`/quote/${quoteId}?error=Only%20sent%20quotes%20can%20be%20accepted`);
+    publicUrl.searchParams.set("error", "Only sent quotes can be accepted");
+    redirect(publicUrl.toString());
   }
 
   await db
@@ -55,5 +66,6 @@ export async function acceptQuote(formData: FormData) {
   revalidatePath(`/dashboard/quotes/${quoteId}`);
   revalidatePath(`/quote/${quoteId}`);
 
-  redirect(`/quote/${quoteId}?success=Quote%20accepted`);
+  publicUrl.searchParams.set("success", "Quote accepted");
+  redirect(publicUrl.toString());
 }

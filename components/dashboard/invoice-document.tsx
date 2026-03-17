@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ReactNode } from "react";
+import { WhatsAppDeliveryBadge } from "@/components/dashboard/whatsapp-delivery-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { currency, formatDate } from "@/lib/utils";
@@ -11,6 +12,7 @@ type InvoiceDocumentProps = {
     total: number;
     due_date: string;
     created_at: string;
+    whatsapp_delivery_status?: "queued" | "sent" | "delivered" | "read" | "failed" | null;
     items?: Array<{
       id?: string;
       description: string;
@@ -61,6 +63,7 @@ export function InvoiceDocument({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={invoice.status}>{invoice.status}</Badge>
+          <WhatsAppDeliveryBadge status={invoice.whatsapp_delivery_status} />
           {actions}
         </div>
       </div>

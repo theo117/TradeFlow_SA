@@ -4,6 +4,8 @@ export type Customer = {
   name: string;
   email: string | null;
   phone: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_opt_in: boolean;
   address: string | null;
   created_at: string;
 };
@@ -33,8 +35,9 @@ export type Quote = {
   status: "draft" | "sent" | "accepted";
   total: number;
   created_at: string;
+  whatsapp_delivery_status?: "queued" | "sent" | "delivered" | "read" | "failed" | null;
   business?: Business | null;
-  customer?: Pick<Customer, "id" | "name" | "email" | "phone" | "address"> | null;
+  customer?: Pick<Customer, "id" | "name" | "email" | "phone" | "whatsapp_phone" | "whatsapp_opt_in" | "address"> | null;
   items?: QuoteItem[];
 };
 
@@ -61,8 +64,9 @@ export type Invoice = {
   total: number;
   due_date: string;
   created_at: string;
+  whatsapp_delivery_status?: "queued" | "sent" | "delivered" | "read" | "failed" | null;
   business?: Business | null;
-  customer?: Pick<Customer, "id" | "name" | "email" | "phone" | "address"> | null;
+  customer?: Pick<Customer, "id" | "name" | "email" | "phone" | "whatsapp_phone" | "whatsapp_opt_in" | "address"> | null;
   items?: InvoiceItem[];
 };
 
@@ -86,6 +90,8 @@ export type Business = {
   phone: string | null;
   address: string | null;
   logo_url: string | null;
+  whatsapp_phone_number_id: string | null;
+  whatsapp_business_account_id: string | null;
   vat_number: string | null;
   registration_number: string | null;
   bank_name: string | null;

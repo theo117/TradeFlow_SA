@@ -49,6 +49,15 @@ export default async function CustomerDetailPage({
               <p className="font-medium text-ink">{customer.phone ?? "Not provided"}</p>
             </div>
             <div>
+              <p className="text-slate-500">WhatsApp</p>
+              <p className="font-medium text-ink">
+                {customer.whatsapp_phone ?? "Not provided"}
+              </p>
+              <p className="text-xs text-slate-500">
+                {customer.whatsapp_opt_in ? "Opted in" : "Not opted in"}
+              </p>
+            </div>
+            <div>
               <p className="text-slate-500">Address</p>
               <p className="font-medium text-ink">{customer.address ?? "Not provided"}</p>
             </div>

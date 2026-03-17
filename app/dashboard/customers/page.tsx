@@ -20,8 +20,10 @@ export default async function CustomersPage() {
             value: customers.filter((customer) => customer.email).length
           },
           {
-            label: "With phone",
-            value: customers.filter((customer) => customer.phone).length
+            label: "WhatsApp ready",
+            value: customers.filter(
+              (customer) => customer.whatsapp_phone && customer.whatsapp_opt_in
+            ).length
           }
         ]}
       />

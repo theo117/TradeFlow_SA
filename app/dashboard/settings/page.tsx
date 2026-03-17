@@ -20,7 +20,7 @@ export default async function SettingsPage({
     <div className="space-y-6">
       <WorkflowHeader
         title="Business settings"
-        subtitle="Update your company details, payment instructions, and logo."
+        subtitle="Update your company details, WhatsApp config, payment instructions, and logo."
         backHref="/dashboard"
         backLabel="Back to dashboard"
       />
@@ -143,6 +143,31 @@ export default async function SettingsPage({
               defaultValue={business.payment_instructions ?? ""}
             />
           </Field>
+        </FormSection>
+
+        <FormSection
+          title="WhatsApp Cloud"
+          description="Store the Meta IDs used for delivery and webhook matching."
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field htmlFor="whatsappPhoneNumberId" label="Phone number ID">
+              <Input
+                id="whatsappPhoneNumberId"
+                name="whatsappPhoneNumberId"
+                defaultValue={business.whatsapp_phone_number_id ?? ""}
+              />
+            </Field>
+            <Field htmlFor="whatsappBusinessAccountId" label="Business account ID">
+              <Input
+                id="whatsappBusinessAccountId"
+                name="whatsappBusinessAccountId"
+                defaultValue={business.whatsapp_business_account_id ?? ""}
+              />
+            </Field>
+          </div>
+          <p className="text-sm text-slate-500">
+            Keep the access token, verify token, and approved template names in environment variables.
+          </p>
         </FormSection>
 
         <PendingButton pendingLabel="Saving settings...">

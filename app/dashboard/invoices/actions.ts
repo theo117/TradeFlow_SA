@@ -8,6 +8,8 @@ import { requirePaidBusiness } from "@/lib/auth";
 import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import {
+  businesses,
+  customers,
   invoiceItems,
   invoices,
   quoteItems,
@@ -15,7 +17,9 @@ import {
   services
 } from "@/lib/db/schema";
 import { getDefaultInvoiceDueDate } from "@/lib/invoices";
+import { revokePublicShareTokens } from "@/lib/public-access";
 import { convertQuoteToInvoiceSchema, invoiceStatusSchema } from "@/lib/validations";
+import { sendInvoiceWhatsappMessage } from "@/lib/whatsapp";
 import { buildInvoiceItemsFromQuoteItems } from "@/lib/workflows";
 
 export async function convertQuoteToInvoice(formData: FormData) {
@@ -215,6 +219,74 @@ export async function recordInvoiceReminder(
         .where(eq(invoices.id, invoice.id));
     }
 
+    if (channel === "whatsapp") {
+      const [invoiceDetail] = await db
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          total: invoices.total,
+          dueDate: invoices.dueDate,
+          customer: {
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            whatsappPhone: customers.whatsappPhone,
+            whatsappOptIn: customers.whatsappOptIn
+          },
+          business: {
+            id: businesses.id,
+            name: businesses.name,
+            whatsappPhoneNumberId: businesses.whatsappPhoneNumberId
+          }
+        })
+        .from(invoices)
+        .innerJoin(customers, eq(invoices.customerId, customers.id))
+        .innerJoin(businesses, eq(invoices.businessId, businesses.id))
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+        .limit(1);
+
+      if (!invoiceDetail) {
+        return {
+          error: true,
+          message: "Invoice not found",
+          delivery: "manual" as const
+        };
+      }
+
+      const whatsappResult = await sendInvoiceWhatsappMessage({
+        invoiceId: invoiceDetail.id,
+        invoiceNumber: invoiceDetail.invoiceNumber,
+        total: Number(invoiceDetail.total),
+        dueDate: invoiceDetail.dueDate,
+        reminder: invoice.status !== "draft",
+        customer: {
+          id: invoiceDetail.customer.id,
+          name: invoiceDetail.customer.name,
+          phone: invoiceDetail.customer.phone,
+          whatsapp_phone: invoiceDetail.customer.whatsappPhone,
+          whatsapp_opt_in: invoiceDetail.customer.whatsappOptIn
+        },
+        business: {
+          id: invoiceDetail.business.id,
+          name: invoiceDetail.business.name,
+          whatsapp_phone_number_id: invoiceDetail.business.whatsappPhoneNumberId
+        }
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/dashboard/invoices");
+      revalidatePath(`/dashboard/invoices/${invoice.id}`);
+
+      return {
+        error: !whatsappResult.ok && whatsappResult.delivery !== "manual",
+        message:
+          whatsappResult.delivery === "manual"
+            ? "Opening WhatsApp draft"
+            : whatsappResult.message,
+        delivery: whatsappResult.delivery
+      };
+    }
+
     await logActivityEvent({
       businessId: business.id,
       customerId: invoice.customerId,
@@ -230,15 +302,47 @@ export async function recordInvoiceReminder(
 
     return {
       error: false,
-      message:
-        channel === "email"
-          ? "Invoice email prepared"
-          : "Invoice WhatsApp reminder prepared"
+      message: "Invoice email prepared",
+      delivery: "manual" as const
     };
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to prepare reminder"
+      message: error instanceof Error ? error.message : "Unable to prepare reminder",
+      delivery: "manual" as const
+    };
+  }
+}
+
+export async function revokeInvoicePublicLinks(invoiceId: string) {
+  const business = await requirePaidBusiness();
+
+  try {
+    const revokedCount = await revokePublicShareTokens({
+      businessId: business.id,
+      documentType: "invoice",
+      documentId: invoiceId,
+      revokedByUserId: business.owner_id
+    });
+
+    revalidatePath("/dashboard/invoices");
+    revalidatePath(`/dashboard/invoices/${invoiceId}`);
+    revalidatePath(`/invoice/${invoiceId}`);
+
+    return {
+      error: false,
+      message:
+        revokedCount > 0
+          ? "Public invoice links revoked"
+          : "No active public invoice links to revoke"
+    };
+  } catch (error) {
+    return {
+      error: true,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Unable to revoke public invoice links"
     };
   }
 }

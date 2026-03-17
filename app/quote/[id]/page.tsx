@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { acceptQuote } from "@/app/quote/actions";
+import { WhatsAppShareButton } from "@/components/dashboard/whatsapp-share-button";
 import { PendingButton } from "@/components/forms/pending-button";
 import { QuoteDocument } from "@/components/dashboard/quote-document";
 import { buttonVariants } from "@/components/ui/button";
-import { getQuotePdfUrl } from "@/lib/quotes";
+import {
+  buildWhatsappQuoteUrl,
+  getQuotePdfUrl,
+  getQuotePublicUrl,
+  getQuoteWhatsappRecipient
+} from "@/lib/quotes";
+import { validatePublicAccessToken } from "@/lib/public-access";
 import { getPublicQuoteById } from "@/lib/queries";
 
 export default async function PublicQuotePage({
@@ -12,16 +19,38 @@ export default async function PublicQuotePage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{
+    success?: string;
+    error?: string;
+    token?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { success, error } = await searchParams;
+  const { success, error, token } = await searchParams;
+
+  if (!(await validatePublicAccessToken({ type: "quote", id, token }))) {
+    notFound();
+  }
+
   const quote = await getPublicQuoteById(id);
 
   if (!quote || !quote.business || !quote.customer) {
     notFound();
   }
 
+  const whatsappRecipient = getQuoteWhatsappRecipient(quote.customer);
+  const publicUrl = await getQuotePublicUrl(quote.id, quote.business.id);
+  const pdfUrl = await getQuotePdfUrl(quote.id, quote.business.id);
+  const whatsappHref = whatsappRecipient
+    ? buildWhatsappQuoteUrl({
+        phone: whatsappRecipient,
+        customerName: quote.customer.name,
+        quoteReference: quote.id.slice(0, 8).toUpperCase(),
+        businessName: quote.business.name,
+        total: Number(quote.total),
+        quoteUrl: publicUrl
+      })
+    : null;
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#e8f0ff_0%,#f8fafc_32%,#f8fafc_100%)] px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -36,11 +65,12 @@ export default async function PublicQuotePage({
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={getQuotePdfUrl(quote.id)}
+              href={pdfUrl}
               className={buttonVariants({ variant: "secondary" })}
             >
               Download PDF
             </Link>
+            <WhatsAppShareButton href={whatsappHref} />
             {quote.status === "accepted" ? (
               <span
                 className={buttonVariants({
@@ -53,6 +83,7 @@ export default async function PublicQuotePage({
             ) : quote.status === "sent" ? (
               <form action={acceptQuote}>
                 <input type="hidden" name="quoteId" value={quote.id} />
+                <input type="hidden" name="token" value={token ?? ""} />
                 <PendingButton pendingLabel="Accepting...">Accept quote</PendingButton>
               </form>
             ) : (

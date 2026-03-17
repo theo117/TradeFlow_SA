@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   recordInvoiceReminder,
+  revokeInvoicePublicLinks,
   updateInvoiceStatus
 } from "@/app/dashboard/invoices/actions";
 import { EmailShareButton } from "@/components/dashboard/email-share-button";
@@ -31,7 +32,9 @@ export function InvoiceDetailActions({
 }) {
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState(status);
-  const [pending, setPending] = useState<"sent" | "paid" | "email" | "whatsapp" | null>(null);
+  const [pending, setPending] = useState<
+    "sent" | "paid" | "email" | "whatsapp" | "revoke" | null
+  >(null);
   const [toast, setToast] = useState<InlineToastState>(null);
 
   async function handleStatus(nextStatus: "sent" | "paid") {
@@ -56,7 +59,7 @@ export function InvoiceDetailActions({
     channel: "email" | "whatsapp",
     href?: string | null
   ) {
-    if (!href) {
+    if (channel === "email" && !href) {
       return;
     }
 
@@ -72,10 +75,24 @@ export function InvoiceDetailActions({
     setToast({ kind: "success", message: result.message });
     router.refresh();
 
-    if (channel === "whatsapp") {
+    if (channel === "whatsapp" && result?.delivery === "manual" && href) {
       window.open(href, "_blank", "noreferrer");
-    } else {
+    } else if (channel === "email" && href) {
       window.location.assign(href);
+    }
+
+    setPending(null);
+  }
+
+  async function handleRevokeLinks() {
+    setPending("revoke");
+    const result = await revokeInvoicePublicLinks(invoiceId);
+
+    if (result?.error) {
+      setToast({ kind: "error", message: result.message });
+    } else {
+      setToast({ kind: "success", message: result.message });
+      router.refresh();
     }
 
     setPending(null);
@@ -114,6 +131,14 @@ export function InvoiceDetailActions({
         <Button
           type="button"
           variant="secondary"
+          disabled={pending !== null}
+          onClick={handleRevokeLinks}
+        >
+          {pending === "revoke" ? "Revoking..." : "Revoke public links"}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
           disabled={pending !== null || !primaryEmailHref}
           onClick={() => handleReminder("email", primaryEmailHref)}
         >
@@ -126,7 +151,7 @@ export function InvoiceDetailActions({
         <Button
           type="button"
           variant="secondary"
-          disabled={pending !== null || !primaryWhatsappHref}
+          disabled={pending !== null}
           onClick={() => handleReminder("whatsapp", primaryWhatsappHref)}
         >
           {pending === "whatsapp"

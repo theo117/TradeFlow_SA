@@ -13,6 +13,7 @@ import {
   services
 } from "@/lib/db/schema";
 import { syncOverdueInvoices, syncOverdueInvoicesAsAdmin } from "@/lib/invoices";
+import { parseWhatsappDeliveryState, type WhatsappDeliveryState } from "@/lib/whatsapp";
 
 function mapBusiness(row: {
   id: string;
@@ -22,6 +23,8 @@ function mapBusiness(row: {
   phone: string | null;
   address: string | null;
   logoUrl: string | null;
+  whatsappPhoneNumberId: string | null;
+  whatsappBusinessAccountId: string | null;
   vatNumber: string | null;
   registrationNumber: string | null;
   bankName: string | null;
@@ -46,6 +49,8 @@ function mapBusiness(row: {
     phone: row.phone,
     address: row.address,
     logo_url: row.logoUrl,
+    whatsapp_phone_number_id: row.whatsappPhoneNumberId,
+    whatsapp_business_account_id: row.whatsappBusinessAccountId,
     vat_number: row.vatNumber,
     registration_number: row.registrationNumber,
     bank_name: row.bankName,
@@ -70,6 +75,8 @@ function mapCustomer(row: {
   name: string;
   email: string | null;
   phone: string | null;
+  whatsappPhone: string | null;
+  whatsappOptIn: boolean;
   address: string | null;
   createdAt: string;
 }) {
@@ -79,6 +86,8 @@ function mapCustomer(row: {
     name: row.name,
     email: row.email,
     phone: row.phone,
+    whatsapp_phone: row.whatsappPhone,
+    whatsapp_opt_in: row.whatsappOptIn,
     address: row.address,
     created_at: row.createdAt
   };
@@ -98,6 +107,51 @@ function mapService(row: {
     description: row.description,
     price: row.price
   };
+}
+
+async function getLatestWhatsappDeliveryStatus({
+  businessId,
+  quoteId,
+  invoiceId
+}: {
+  businessId: string;
+  quoteId?: string | null;
+  invoiceId?: string | null;
+}): Promise<WhatsappDeliveryState | null> {
+  const [row] = await db
+    .select({
+      type: activityEvents.type,
+      description: activityEvents.description
+    })
+    .from(activityEvents)
+    .where(
+      quoteId
+        ? and(
+            eq(activityEvents.businessId, businessId),
+            eq(activityEvents.quoteId, quoteId),
+            inArray(activityEvents.type, [
+              "quote.whatsapp_sent",
+              "quote.whatsapp_status"
+            ])
+          )
+        : and(
+            eq(activityEvents.businessId, businessId),
+            eq(activityEvents.invoiceId, invoiceId ?? ""),
+            inArray(activityEvents.type, [
+              "invoice.whatsapp_sent",
+              "invoice.whatsapp_reminder_sent",
+              "invoice.whatsapp_status"
+            ])
+          )
+    )
+    .orderBy(desc(activityEvents.createdAt))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return parseWhatsappDeliveryState(row.type, row.description);
 }
 
 export const getDashboardMetrics = cache(async () => {
@@ -330,6 +384,8 @@ export const getQuotes = cache(async () => {
         name: customers.name,
         email: customers.email,
         phone: customers.phone,
+        whatsappPhone: customers.whatsappPhone,
+        whatsappOptIn: customers.whatsappOptIn,
         address: customers.address
       }
     })
@@ -351,6 +407,8 @@ export const getQuotes = cache(async () => {
           name: row.customer.name ?? "Unknown",
           email: row.customer.email,
           phone: row.customer.phone,
+          whatsapp_phone: row.customer.whatsappPhone,
+          whatsapp_opt_in: row.customer.whatsappOptIn,
           address: row.customer.address
         }
       : null
@@ -374,6 +432,8 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
         phone: businesses.phone,
         address: businesses.address,
         logoUrl: businesses.logoUrl,
+        whatsappPhoneNumberId: businesses.whatsappPhoneNumberId,
+        whatsappBusinessAccountId: businesses.whatsappBusinessAccountId,
         vatNumber: businesses.vatNumber,
         registrationNumber: businesses.registrationNumber,
         bankName: businesses.bankName,
@@ -396,6 +456,8 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
         name: customers.name,
         email: customers.email,
         phone: customers.phone,
+        whatsappPhone: customers.whatsappPhone,
+        whatsappOptIn: customers.whatsappOptIn,
         address: customers.address,
         createdAt: customers.createdAt
       }
@@ -430,6 +492,11 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
     .leftJoin(services, eq(quoteItems.serviceId, services.id))
     .where(eq(quoteItems.quoteId, quoteRow.id));
 
+  const whatsappDeliveryStatus = await getLatestWhatsappDeliveryStatus({
+    businessId: quoteRow.businessId,
+    quoteId: quoteRow.id
+  });
+
   return {
     id: quoteRow.id,
     business_id: quoteRow.businessId,
@@ -439,6 +506,7 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
     created_at: quoteRow.createdAt,
     business: mapBusiness(quoteRow.business),
     customer: quoteRow.customer?.id ? mapCustomer(quoteRow.customer) : null,
+    whatsapp_delivery_status: whatsappDeliveryStatus,
     items: itemRows.map((item) => ({
       id: item.id,
       quote_id: item.quoteId,
@@ -505,6 +573,8 @@ export const getInvoices = cache(async () => {
         name: customers.name,
         email: customers.email,
         phone: customers.phone,
+        whatsappPhone: customers.whatsappPhone,
+        whatsappOptIn: customers.whatsappOptIn,
         address: customers.address
       }
     })
@@ -529,6 +599,8 @@ export const getInvoices = cache(async () => {
           name: row.customer.name ?? "Unknown",
           email: row.customer.email,
           phone: row.customer.phone,
+          whatsapp_phone: row.customer.whatsappPhone,
+          whatsapp_opt_in: row.customer.whatsappOptIn,
           address: row.customer.address
         }
       : null
@@ -555,6 +627,8 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
         phone: businesses.phone,
         address: businesses.address,
         logoUrl: businesses.logoUrl,
+        whatsappPhoneNumberId: businesses.whatsappPhoneNumberId,
+        whatsappBusinessAccountId: businesses.whatsappBusinessAccountId,
         vatNumber: businesses.vatNumber,
         registrationNumber: businesses.registrationNumber,
         bankName: businesses.bankName,
@@ -577,6 +651,8 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
         name: customers.name,
         email: customers.email,
         phone: customers.phone,
+        whatsappPhone: customers.whatsappPhone,
+        whatsappOptIn: customers.whatsappOptIn,
         address: customers.address,
         createdAt: customers.createdAt
       }
@@ -612,6 +688,11 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
     .leftJoin(services, eq(invoiceItems.serviceId, services.id))
     .where(eq(invoiceItems.invoiceId, invoiceRow.id));
 
+  const whatsappDeliveryStatus = await getLatestWhatsappDeliveryStatus({
+    businessId: invoiceRow.businessId,
+    invoiceId: invoiceRow.id
+  });
+
   return {
     id: invoiceRow.id,
     business_id: invoiceRow.businessId,
@@ -624,6 +705,7 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
     created_at: invoiceRow.createdAt,
     business: mapBusiness(invoiceRow.business),
     customer: mapCustomer(invoiceRow.customer),
+    whatsapp_delivery_status: whatsappDeliveryStatus,
     items: itemRows.map((item) => ({
       id: item.id,
       invoice_id: item.invoiceId,

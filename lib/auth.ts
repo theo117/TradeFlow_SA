@@ -36,6 +36,8 @@ export async function requireBusiness() {
     phone: business.phone,
     address: business.address,
     logo_url: business.logoUrl,
+    whatsapp_phone_number_id: business.whatsappPhoneNumberId,
+    whatsapp_business_account_id: business.whatsappBusinessAccountId,
     vat_number: business.vatNumber,
     registration_number: business.registrationNumber,
     bank_name: business.bankName,

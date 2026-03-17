@@ -43,7 +43,18 @@ export default async function NewCustomerPage({
             <Field htmlFor="phone" label="Phone">
               <Input id="phone" name="phone" />
             </Field>
+            <Field htmlFor="whatsappPhone" label="WhatsApp phone">
+              <Input id="whatsappPhone" name="whatsappPhone" />
+            </Field>
           </div>
+          <label className="flex items-center gap-3 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              name="whatsappOptIn"
+              className="h-4 w-4 rounded border-slate-300 text-ink focus:ring-ink"
+            />
+            Customer has opted in to WhatsApp updates
+          </label>
           <Field htmlFor="address" label="Address">
             <Textarea id="address" name="address" />
           </Field>

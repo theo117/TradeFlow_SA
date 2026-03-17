@@ -4,9 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { convertQuoteToInvoice } from "@/app/dashboard/invoices/actions";
-import { deleteQuote, updateQuoteStatus } from "@/app/dashboard/quotes/actions";
+import {
+  deleteQuote,
+  revokeQuotePublicLinks,
+  sendQuoteViaWhatsapp,
+  updateQuoteStatus
+} from "@/app/dashboard/quotes/actions";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { EmailShareButton } from "@/components/dashboard/email-share-button";
+import { WhatsAppShareButton } from "@/components/dashboard/whatsapp-share-button";
 import { PendingButton } from "@/components/forms/pending-button";
 import { InlineToast, type InlineToastState } from "@/components/feedback/inline-toast";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,6 +23,7 @@ export function QuoteDetailActions({
   status,
   defaultDueDate,
   emailHref,
+  whatsappHref,
   publicHref,
   existingInvoice
 }: {
@@ -24,6 +31,7 @@ export function QuoteDetailActions({
   status: "draft" | "sent" | "accepted";
   defaultDueDate: string;
   emailHref?: string | null;
+  whatsappHref?: string | null;
   publicHref: string;
   existingInvoice?: {
     id: string;
@@ -33,7 +41,9 @@ export function QuoteDetailActions({
 }) {
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState(status);
-  const [pending, setPending] = useState<"status" | "delete" | null>(null);
+  const [pending, setPending] = useState<
+    "status" | "delete" | "whatsapp" | "revoke" | null
+  >(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<InlineToastState>(null);
 
@@ -78,6 +88,40 @@ export function QuoteDetailActions({
     router.push("/dashboard/quotes?success=Quote%20deleted");
   }
 
+  async function handleWhatsapp() {
+    setPending("whatsapp");
+    const result = await sendQuoteViaWhatsapp(quoteId);
+
+    if (result?.error) {
+      setToast({ kind: "error", message: result.message });
+      setPending(null);
+      return;
+    }
+
+    setToast({ kind: "success", message: result.message });
+    router.refresh();
+
+    if (result?.delivery === "manual" && whatsappHref) {
+      window.open(whatsappHref, "_blank", "noreferrer");
+    }
+
+    setPending(null);
+  }
+
+  async function handleRevokeLinks() {
+    setPending("revoke");
+    const result = await revokeQuotePublicLinks(quoteId);
+
+    if (result?.error) {
+      setToast({ kind: "error", message: result.message });
+    } else {
+      setToast({ kind: "success", message: result.message });
+      router.refresh();
+    }
+
+    setPending(null);
+  }
+
   return (
     <>
       <div className="flex flex-col gap-3">
@@ -114,7 +158,24 @@ export function QuoteDetailActions({
           >
             Open public quote
           </Link>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending !== null}
+            onClick={handleRevokeLinks}
+          >
+            {pending === "revoke" ? "Revoking..." : "Revoke public links"}
+          </Button>
           <EmailShareButton href={emailHref} />
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending !== null}
+            onClick={handleWhatsapp}
+          >
+            {pending === "whatsapp" ? "Sending..." : "Send via WhatsApp"}
+          </Button>
+          <WhatsAppShareButton href={whatsappHref} className="hidden" />
           {existingInvoice ? (
             <Link
               href={`/dashboard/invoices/${existingInvoice.id}`}

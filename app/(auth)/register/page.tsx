@@ -25,7 +25,7 @@ export default async function RegisterPage({
           <Input id="email" name="email" type="email" placeholder="owner@business.co.za" required />
         </Field>
         <Field htmlFor="password" label="Password">
-          <Input id="password" name="password" type="password" placeholder="At least 6 characters" required />
+          <Input id="password" name="password" type="password" placeholder="At least 10 characters" required />
         </Field>
         {params.error ? (
           <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{params.error}</p>

@@ -29,6 +29,8 @@ create table if not exists public.businesses (
   phone text,
   address text,
   logo_url text,
+  whatsapp_phone_number_id text,
+  whatsapp_business_account_id text,
   vat_number text,
   registration_number text,
   bank_name text,
@@ -47,6 +49,8 @@ create table if not exists public.businesses (
 );
 
 alter table public.businesses add column if not exists vat_number text;
+alter table public.businesses add column if not exists whatsapp_phone_number_id text;
+alter table public.businesses add column if not exists whatsapp_business_account_id text;
 alter table public.businesses add column if not exists registration_number text;
 alter table public.businesses add column if not exists bank_name text;
 alter table public.businesses add column if not exists bank_account_name text;
@@ -66,9 +70,14 @@ create table if not exists public.customers (
   name text not null,
   email text,
   phone text,
+  whatsapp_phone text,
+  whatsapp_opt_in boolean not null default false,
   address text,
   created_at timestamptz not null default now()
 );
+
+alter table public.customers add column if not exists whatsapp_phone text;
+alter table public.customers add column if not exists whatsapp_opt_in boolean not null default false;
 
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
@@ -134,6 +143,40 @@ create table if not exists public.activity_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.login_rate_limits (
+  identifier text primary key,
+  attempt_count integer not null default 0,
+  window_started_at timestamptz not null default now(),
+  blocked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.public_share_tokens (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  created_by_user_id uuid references public.users (id) on delete set null,
+  document_type text not null,
+  quote_id uuid references public.quotes (id) on delete cascade,
+  invoice_id uuid references public.invoices (id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  last_accessed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_events (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid references public.businesses (id) on delete cascade,
+  user_id uuid references public.users (id) on delete set null,
+  action text not null,
+  entity_type text,
+  entity_id text,
+  ip text,
+  metadata jsonb,
+  created_at timestamptz not null default now()
+);
+
 create unique index if not exists users_email_idx on public.users (email);
 create unique index if not exists businesses_owner_id_idx on public.businesses (owner_id);
 create unique index if not exists businesses_billing_customer_id_idx on public.businesses (billing_customer_id);
@@ -154,3 +197,11 @@ create index if not exists activity_events_customer_id_idx on public.activity_ev
 create index if not exists activity_events_quote_id_idx on public.activity_events (quote_id);
 create index if not exists activity_events_invoice_id_idx on public.activity_events (invoice_id);
 create index if not exists activity_events_created_at_idx on public.activity_events (created_at);
+create index if not exists login_rate_limits_blocked_until_idx on public.login_rate_limits (blocked_until);
+create index if not exists public_share_tokens_business_id_idx on public.public_share_tokens (business_id);
+create index if not exists public_share_tokens_quote_id_idx on public.public_share_tokens (quote_id);
+create index if not exists public_share_tokens_invoice_id_idx on public.public_share_tokens (invoice_id);
+create index if not exists public_share_tokens_expires_at_idx on public.public_share_tokens (expires_at);
+create index if not exists audit_events_business_id_idx on public.audit_events (business_id);
+create index if not exists audit_events_user_id_idx on public.audit_events (user_id);
+create index if not exists audit_events_created_at_idx on public.audit_events (created_at);

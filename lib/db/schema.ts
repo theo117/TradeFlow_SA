@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -54,6 +56,8 @@ export const businesses = pgTable(
     phone: text("phone"),
     address: text("address"),
     logoUrl: text("logo_url"),
+    whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
+    whatsappBusinessAccountId: text("whatsapp_business_account_id"),
     vatNumber: text("vat_number"),
     registrationNumber: text("registration_number"),
     bankName: text("bank_name"),
@@ -104,6 +108,8 @@ export const customers = pgTable(
     name: text("name").notNull(),
     email: text("email"),
     phone: text("phone"),
+    whatsappPhone: text("whatsapp_phone"),
+    whatsappOptIn: boolean("whatsapp_opt_in").default(false).notNull(),
     address: text("address"),
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -280,5 +286,102 @@ export const activityEvents = pgTable(
     quoteIdx: index("activity_events_quote_id_idx").on(table.quoteId),
     invoiceIdx: index("activity_events_invoice_id_idx").on(table.invoiceId),
     createdAtIdx: index("activity_events_created_at_idx").on(table.createdAt)
+  })
+);
+
+export const loginRateLimits = pgTable(
+  "login_rate_limits",
+  {
+    identifier: text("identifier").primaryKey(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull(),
+    blockedUntil: timestamp("blocked_until", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    blockedUntilIdx: index("login_rate_limits_blocked_until_idx").on(table.blockedUntil)
+  })
+);
+
+export const publicShareTokens = pgTable(
+  "public_share_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    documentType: text("document_type").notNull(),
+    quoteId: uuid("quote_id").references(() => quotes.id, { onDelete: "cascade" }),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, {
+      onDelete: "cascade"
+    }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "string"
+    }).notNull(),
+    revokedAt: timestamp("revoked_at", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    lastAccessedAt: timestamp("last_accessed_at", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    businessIdx: index("public_share_tokens_business_id_idx").on(table.businessId),
+    quoteIdx: index("public_share_tokens_quote_id_idx").on(table.quoteId),
+    invoiceIdx: index("public_share_tokens_invoice_id_idx").on(table.invoiceId),
+    expiresAtIdx: index("public_share_tokens_expires_at_idx").on(table.expiresAt)
+  })
+);
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    businessId: uuid("business_id").references(() => businesses.id, {
+      onDelete: "cascade"
+    }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    ip: text("ip"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    businessIdx: index("audit_events_business_id_idx").on(table.businessId),
+    userIdx: index("audit_events_user_id_idx").on(table.userId),
+    createdAtIdx: index("audit_events_created_at_idx").on(table.createdAt)
   })
 );
