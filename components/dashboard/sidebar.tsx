@@ -23,8 +23,8 @@ const links = [
   { href: "/dashboard/services", label: "Services", icon: BriefcaseBusiness },
   { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
   { href: "/dashboard/invoices", label: "Invoices", icon: ReceiptText },
-  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings }
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/billing", label: "Billing", icon: CreditCard }
 ];
 
 export function Sidebar({
