@@ -8,7 +8,7 @@ import { login } from "@/app/(auth)/actions";
 export default async function LoginPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const params = await searchParams;
 
@@ -18,6 +18,7 @@ export default async function LoginPage({
       subtitle="Login to access your quotes, services, and customer records."
     >
       <form action={login} className="space-y-4">
+        <input type="hidden" name="next" value={params.next ?? ""} />
         <Field htmlFor="email" label="Email">
           <Input id="email" name="email" type="email" placeholder="owner@business.co.za" required />
         </Field>
