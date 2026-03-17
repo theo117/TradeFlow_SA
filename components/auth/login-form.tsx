@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +14,6 @@ export function LoginForm({
   next?: string;
   initialError?: string;
 }) {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(initialError ?? "");
 
@@ -36,14 +34,21 @@ export function LoginForm({
       redirectTo
     });
 
-    if (!result || result.error) {
+    if (!result || result.error || !result.ok) {
       setError("Invalid email or password");
       setPending(false);
       return;
     }
 
-    router.push(result.url ?? redirectTo);
-    router.refresh();
+    const session = await waitForSession();
+
+    if (!session?.user?.email) {
+      setError("Login did not create a session. Please refresh and try again.");
+      setPending(false);
+      return;
+    }
+
+    window.location.assign(result.url ?? redirectTo);
   }
 
   return (
@@ -82,4 +87,18 @@ export function LoginForm({
       </p>
     </>
   );
+}
+
+async function waitForSession() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const session = await getSession();
+
+    if (session) {
+      return session;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  return null;
 }
