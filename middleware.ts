@@ -1,16 +1,15 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import authConfig from "@/auth.config";
 
 const PROTECTED_PREFIX = "/dashboard";
 const AUTH_ROUTES = ["/login", "/register"];
 
-export async function middleware(request: NextRequest) {
+const { auth } = NextAuth(authConfig);
+
+export default auth((request) => {
   const { pathname } = request.nextUrl;
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET
-  });
-  const isAuthenticated = Boolean(token);
+  const isAuthenticated = Boolean(request.auth);
 
   if (pathname.startsWith(PROTECTED_PREFIX) && !isAuthenticated) {
     const redirectUrl = request.nextUrl.clone();
@@ -27,7 +26,7 @@ export async function middleware(request: NextRequest) {
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: ["/dashboard/:path*", "/login", "/register"]
