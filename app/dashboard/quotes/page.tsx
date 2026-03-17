@@ -21,6 +21,10 @@ export default async function QuotesPage() {
             value: quotes.filter((quote) => quote.status === "sent").length
           },
           {
+            label: "Accepted quotes",
+            value: quotes.filter((quote) => quote.status === "accepted").length
+          },
+          {
             label: "Total value",
             value: currency(
               quotes.reduce((sum, quote) => sum + Number(quote.total), 0)

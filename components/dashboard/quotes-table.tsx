@@ -28,7 +28,9 @@ type QuoteRow = Pick<Quote, "id" | "status" | "total" | "created_at"> & {
 export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
   const PAGE_SIZE = 6;
   const [rows, setRows] = useState(quotes);
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "sent">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "draft" | "sent" | "accepted"
+  >("all");
   const [statusPendingId, setStatusPendingId] = useState<string | null>(null);
   const filteredRows = useMemo(
     () => rows.filter((quote) => statusFilter === "all" || quote.status === statusFilter),
@@ -110,6 +112,10 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
     });
 
   async function handleStatusToggle(quote: QuoteRow) {
+    if (quote.status === "accepted") {
+      return;
+    }
+
     const nextStatus: QuoteRow["status"] =
       quote.status === "draft" ? "sent" : "draft";
     const snapshot = rows;
@@ -155,9 +161,12 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
           filterOptions={[
             { label: "All statuses", value: "all" },
             { label: "Draft", value: "draft" },
-            { label: "Sent", value: "sent" }
+            { label: "Sent", value: "sent" },
+            { label: "Accepted", value: "accepted" }
           ]}
-          onFilterChange={(value) => setStatusFilter(value as "all" | "draft" | "sent")}
+          onFilterChange={(value) =>
+            setStatusFilter(value as "all" | "draft" | "sent" | "accepted")
+          }
           resultLabel={`${processedItems.length} of ${rows.length} quotes`}
           onReset={() => {
             resetSearch();
@@ -219,10 +228,16 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                         type="button"
                         variant="secondary"
                         onClick={() => handleStatusToggle(quote)}
-                        disabled={pendingId === quote.id || statusPendingId === quote.id}
+                        disabled={
+                          quote.status === "accepted" ||
+                          pendingId === quote.id ||
+                          statusPendingId === quote.id
+                        }
                       >
                         {statusPendingId === quote.id
                           ? "Updating..."
+                          : quote.status === "accepted"
+                            ? "Accepted"
                           : quote.status === "draft"
                             ? "Mark sent"
                             : "Mark draft"}
@@ -277,7 +292,9 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                     Quote #{quote.id.slice(0, 8).toUpperCase()}
                   </p>
                 </div>
-                {quote.status === "sent" ? (
+                {quote.status === "accepted" ? (
+                  <SendHorizontal className="h-5 w-5 text-emerald-600" />
+                ) : quote.status === "sent" ? (
                   <SendHorizontal className="h-5 w-5 text-emerald-500" />
                 ) : (
                   <FileText className="h-5 w-5 text-amber-500" />
@@ -305,10 +322,16 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                   type="button"
                   variant="secondary"
                   onClick={() => handleStatusToggle(quote)}
-                  disabled={pendingId === quote.id || statusPendingId === quote.id}
+                  disabled={
+                    quote.status === "accepted" ||
+                    pendingId === quote.id ||
+                    statusPendingId === quote.id
+                  }
                 >
                   {statusPendingId === quote.id
                     ? "Updating..."
+                    : quote.status === "accepted"
+                      ? "Accepted"
                     : quote.status === "draft"
                       ? "Mark sent"
                       : "Mark draft"}

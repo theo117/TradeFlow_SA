@@ -1,8 +1,8 @@
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb, type RGB } from "pdf-lib";
-import type { Business, Customer, Invoice, InvoiceItem } from "@/lib/types";
+import type { Business, Customer, Quote, QuoteItem } from "@/lib/types";
 import { currency, formatDate } from "@/lib/utils";
 
-type InvoicePdfPayload = {
+type QuotePdfPayload = {
   business: Pick<
     Business,
     | "name"
@@ -19,11 +19,15 @@ type InvoicePdfPayload = {
     | "logo_url"
   >;
   customer: Pick<Customer, "name" | "email" | "phone" | "address">;
-  invoice: Pick<Invoice, "invoice_number" | "created_at" | "due_date" | "total">;
-  items: Pick<InvoiceItem, "description" | "quantity" | "price" | "subtotal">[];
+  quote: Pick<Quote, "id" | "created_at" | "status" | "total">;
+  items: Array<
+    Pick<QuoteItem, "quantity" | "price" | "subtotal"> & {
+      description: string;
+    }
+  >;
 };
 
-export async function generateInvoicePdf(payload: InvoicePdfPayload) {
+export async function generateQuotePdf(payload: QuotePdfPayload) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
@@ -69,11 +73,11 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
     color: ink
   });
 
-  page.drawText("Invoice", {
+  page.drawText("Quote", {
     x: margin,
     y: y - 48,
     size: 12,
-    font: font,
+    font,
     color: muted
   });
 
@@ -120,7 +124,7 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   drawInfoBlock(page, {
     x: width / 2,
     y,
-    title: "Bill to",
+    title: "Quoted for",
     lines: customerLines,
     font,
     fontBold,
@@ -133,8 +137,8 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   drawMetaRow(page, {
     x: margin,
     y,
-    label: "Invoice number",
-    value: payload.invoice.invoice_number,
+    label: "Quote reference",
+    value: payload.quote.id.slice(0, 8).toUpperCase(),
     font,
     fontBold,
     ink,
@@ -143,8 +147,8 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   drawMetaRow(page, {
     x: margin + 180,
     y,
-    label: "Invoice date",
-    value: formatDate(payload.invoice.created_at),
+    label: "Quote date",
+    value: formatDate(payload.quote.created_at),
     font,
     fontBold,
     ink,
@@ -153,8 +157,8 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   drawMetaRow(page, {
     x: margin + 360,
     y,
-    label: "Due date",
-    value: formatDate(payload.invoice.due_date),
+    label: "Status",
+    value: payload.quote.status,
     font,
     fontBold,
     ink,
@@ -249,14 +253,14 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
     color: ink
   });
 
-  page.drawText("Total due", {
+  page.drawText("Quote total", {
     x: width - margin - 156,
     y: y - 18,
     size: 11,
     font,
     color: white
   });
-  page.drawText(currency(Number(payload.invoice.total)), {
+  page.drawText(currency(Number(payload.quote.total)), {
     x: width - margin - 156,
     y: y - 34,
     size: 16,
@@ -301,7 +305,7 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
     y -= 32 + bankingLines.length * 14;
   }
 
-  page.drawText("Payment instructions", {
+  page.drawText("Notes", {
     x: margin,
     y,
     size: 11,
@@ -310,7 +314,7 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   });
   page.drawText(
     payload.business.payment_instructions ??
-      "Please make payment by the due date and use the invoice number as your reference.",
+      "Thank you for considering this quote. Please contact us if you would like any changes.",
     {
       x: margin,
       y: y - 18,
@@ -372,7 +376,7 @@ async function drawLogo(
       height: scaledHeight
     });
   } catch {
-    // Ignore logo fetch or embed errors and keep rendering the invoice.
+    // Ignore logo fetch or embed errors and keep rendering the quote.
   }
 }
 

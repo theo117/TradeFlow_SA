@@ -7,12 +7,14 @@ import { PendingButton } from "@/components/forms/pending-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { requirePaidBusiness } from "@/lib/auth";
 
 export default async function NewCustomerPage({
   searchParams
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requirePaidBusiness();
   const params = await searchParams;
 
   return (

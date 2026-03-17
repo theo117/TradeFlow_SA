@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
-import { requireBusiness } from "@/lib/auth";
+import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { customers, quoteItems, quotes, services } from "@/lib/db/schema";
 import { quoteSchema } from "@/lib/validations";
 
 export async function createQuote(formData: FormData) {
   try {
-    const business = await requireBusiness();
+    const business = await requirePaidBusiness();
     const rawItems = String(formData.get("items") ?? "[]");
     const items = JSON.parse(rawItems);
     const payload = quoteSchema.parse({
@@ -91,9 +91,9 @@ export async function createQuote(formData: FormData) {
 
 export async function updateQuoteStatus(
   quoteId: string,
-  status: "draft" | "sent"
+  status: "draft" | "sent" | "accepted"
 ) {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   try {
     const [updatedQuote] = await db
@@ -126,7 +126,7 @@ export async function updateQuoteStatus(
 }
 
 export async function deleteQuote(formData: FormData) {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   const quoteId = String(formData.get("quoteId"));
 
   try {

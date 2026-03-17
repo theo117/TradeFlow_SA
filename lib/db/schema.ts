@@ -12,7 +12,11 @@ import {
   uuid
 } from "drizzle-orm/pg-core";
 
-export const quoteStatusEnum = pgEnum("quote_status", ["draft", "sent"]);
+export const quoteStatusEnum = pgEnum("quote_status", [
+  "draft",
+  "sent",
+  "accepted"
+]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
   "draft",
   "sent",
@@ -50,7 +54,28 @@ export const businesses = pgTable(
     phone: text("phone"),
     address: text("address"),
     logoUrl: text("logo_url"),
+    vatNumber: text("vat_number"),
+    registrationNumber: text("registration_number"),
+    bankName: text("bank_name"),
+    bankAccountName: text("bank_account_name"),
+    bankAccountNumber: text("bank_account_number"),
+    bankBranchCode: text("bank_branch_code"),
     paymentInstructions: text("payment_instructions"),
+    billingProvider: text("billing_provider"),
+    billingCustomerId: text("billing_customer_id"),
+    billingSubscriptionId: text("billing_subscription_id"),
+    billingPlanId: text("billing_plan_id"),
+    subscriptionStatus: text("subscription_status")
+      .default("trialing")
+      .notNull(),
+    currentPeriodEnd: timestamp("current_period_end", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    trialEndsAt: timestamp("trial_ends_at", {
+      withTimezone: true,
+      mode: "string"
+    }).default(sql`now() + interval '14 days'`),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string"
@@ -59,7 +84,13 @@ export const businesses = pgTable(
       .notNull()
   },
   (table) => ({
-    ownerIdx: uniqueIndex("businesses_owner_id_idx").on(table.ownerId)
+    ownerIdx: uniqueIndex("businesses_owner_id_idx").on(table.ownerId),
+    billingCustomerIdx: uniqueIndex("businesses_billing_customer_id_idx").on(
+      table.billingCustomerId
+    ),
+    billingSubscriptionIdx: uniqueIndex(
+      "businesses_billing_subscription_id_idx"
+    ).on(table.billingSubscriptionId)
   })
 );
 

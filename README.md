@@ -1,6 +1,6 @@
-# TradeFlow SA MVP
+# TradeFlow SA
 
-TradeFlow SA is a SaaS foundation for small South African service businesses to manage customers, services, quotes, and invoices.
+TradeFlow SA helps small South African service businesses manage customers, services, quotes, and invoices.
 
 ## Tech stack
 
@@ -19,6 +19,14 @@ TradeFlow SA is a SaaS foundation for small South African service businesses to 
    - `DATABASE_URL_UNPOOLED`
    - `NEXT_PUBLIC_APP_URL`
    - `AUTH_SECRET`
+   - `PAYFAST_MERCHANT_ID`
+   - `PAYFAST_MERCHANT_KEY`
+   - `PAYFAST_PASSPHRASE`
+   - `PAYFAST_PROCESS_URL`
+   - `PAYFAST_VALIDATE_URL`
+   - `PAYFAST_PLAN_STARTER_AMOUNT`
+   - `PAYFAST_PLAN_PRO_AMOUNT`
+   - `BLOB_READ_WRITE_TOKEN`
 3. Create a PostgreSQL database.
 4. Run the SQL in [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
 5. Install dependencies:
@@ -99,6 +107,14 @@ This app is ready for standard Next.js deployment on Vercel.
    - `DATABASE_URL_UNPOOLED`
    - `AUTH_SECRET`
    - `NEXT_PUBLIC_APP_URL`
+   - `PAYFAST_MERCHANT_ID`
+   - `PAYFAST_MERCHANT_KEY`
+   - `PAYFAST_PASSPHRASE`
+   - `PAYFAST_PROCESS_URL`
+   - `PAYFAST_VALIDATE_URL`
+   - `PAYFAST_PLAN_STARTER_AMOUNT`
+   - `PAYFAST_PLAN_PRO_AMOUNT`
+   - `BLOB_READ_WRITE_TOKEN`
 4. Set `NEXT_PUBLIC_APP_URL` to your production domain, for example `https://your-app.vercel.app`.
 5. Deploy.
 
@@ -124,6 +140,51 @@ Sources:
 - https://vercel.com/docs/cli/env
 - https://vercel.com/docs/frameworks/nextjs
 
+## Logo Uploads
+
+Business logo uploads use Vercel Blob.
+
+1. Create a Blob store in Vercel.
+2. Add `BLOB_READ_WRITE_TOKEN` to your environment variables.
+3. Open `/dashboard/settings` in the app.
+4. Upload a PNG or JPEG logo.
+
+The uploaded logo is stored on the business profile and rendered on invoice views and invoice PDFs.
+
+Source:
+- https://vercel.com/docs/storage/vercel-blob
+
+## Payfast Billing
+
+This repo includes a Payfast billing foundation:
+
+- Payfast checkout redirection from the billing page
+- ITN handling for payment validation and subscription sync
+- Billing-based access control for dashboard workflows
+
+Required Payfast setup:
+
+1. Create or use a Payfast merchant account.
+2. Set:
+   - `PAYFAST_MERCHANT_ID`
+   - `PAYFAST_MERCHANT_KEY`
+   - `PAYFAST_PASSPHRASE`
+   - `PAYFAST_PLAN_STARTER_AMOUNT`
+   - `PAYFAST_PLAN_PRO_AMOUNT`
+3. Add an ITN endpoint:
+
+```text
+https://your-domain.com/api/payfast/notify
+```
+
+4. Re-run [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql) so the billing columns exist.
+5. Confirm recurring billing is enabled if you later move beyond manual monthly renewals.
+
+Sources:
+- https://payfast.io/features/subscriptions/
+- https://payfast.io/faq/merchant-faqs/
+- https://status.payfast.io/
+
 ## Auth flow
 
 - Register creates a local `users` record, hashes the password, then creates a `businesses` row.
@@ -146,6 +207,6 @@ Sources:
 
 ## Notes
 
-- This MVP assumes one business per signed-in user.
+- The current app assumes one business per signed-in user.
 - Access control is enforced in application code instead of database RLS.
 - Public invoice pages and PDF downloads are still available without signing in.

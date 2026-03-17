@@ -61,7 +61,8 @@ export async function register(formData: FormData) {
 
     await tx.insert(businesses).values({
       ownerId: user.id,
-      name: payload.businessName
+      name: payload.businessName,
+      email
     });
   });
 

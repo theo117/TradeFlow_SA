@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <Topbar
         title="Dashboard"
-        subtitle="Track customer growth, quotes, invoices, and revenue from one operating layer."
+        subtitle="Track customers, quotes, invoices, and revenue from one dashboard."
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         <MetricCard
           label="Total quotes"
           value={quoteCount}
-          detail="Every quote created in your workspace across draft and sent stages."
+          detail="Every quote created in your workspace across draft, sent, and accepted stages."
           icon={<FileText className="h-5 w-5" />}
           tone="sky"
         />
@@ -112,12 +112,12 @@ export default async function DashboardPage() {
             </div>
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-sm text-slate-500">Quote conversion</p>
+                <p className="text-sm text-slate-500">Quote acceptance</p>
                 <p className="mt-2 text-3xl font-semibold text-ink">
                   {quoteCount === 0
                     ? "0%"
                     : `${Math.round(
-                        (recentQuotes.filter((quote) => quote.status === "sent").length /
+                        (recentQuotes.filter((quote) => quote.status === "accepted").length /
                           Math.max(recentQuotes.length, 1)) *
                           100
                       )}%`}

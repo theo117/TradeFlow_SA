@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { updateInvoiceStatus } from "@/app/dashboard/invoices/actions";
+import { EmailShareButton } from "@/components/dashboard/email-share-button";
 import { InlineToast, type InlineToastState } from "@/components/feedback/inline-toast";
 import { WhatsAppShareButton } from "@/components/dashboard/whatsapp-share-button";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -12,11 +13,13 @@ export function InvoiceDetailActions({
   invoiceId,
   status,
   pdfHref,
+  emailHref,
   whatsappHref
 }: {
   invoiceId: string;
   status: "draft" | "sent" | "paid" | "overdue";
   pdfHref: string;
+  emailHref?: string | null;
   whatsappHref?: string | null;
 }) {
   const router = useRouter();
@@ -67,6 +70,7 @@ export function InvoiceDetailActions({
         <Link href={pdfHref} className={buttonVariants({ variant: "secondary" })}>
           Download PDF
         </Link>
+        <EmailShareButton href={emailHref} />
         <WhatsAppShareButton href={whatsappHref} />
         <Link
           href="/dashboard/invoices"

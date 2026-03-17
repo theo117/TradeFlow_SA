@@ -4,16 +4,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { currency, formatDate } from "@/lib/utils";
 
-type InvoiceDocumentProps = {
-  invoice: {
-    invoice_number: string;
-    status: "draft" | "sent" | "paid" | "overdue";
+type QuoteDocumentProps = {
+  quote: {
+    id: string;
+    status: "draft" | "sent" | "accepted";
     total: number;
-    due_date: string;
     created_at: string;
     items?: Array<{
       id?: string;
-      description: string;
+      service?: {
+        name?: string | null;
+        description?: string | null;
+      } | null;
       quantity: number;
       price: number;
       subtotal: number;
@@ -27,10 +29,6 @@ type InvoiceDocumentProps = {
     phone?: string | null;
     vat_number?: string | null;
     registration_number?: string | null;
-    bank_name?: string | null;
-    bank_account_name?: string | null;
-    bank_account_number?: string | null;
-    bank_branch_code?: string | null;
     payment_instructions?: string | null;
   };
   customer: {
@@ -42,25 +40,25 @@ type InvoiceDocumentProps = {
   actions?: ReactNode;
 };
 
-export function InvoiceDocument({
-  invoice,
+export function QuoteDocument({
+  quote,
   business,
   customer,
   actions
-}: InvoiceDocumentProps) {
+}: QuoteDocumentProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Invoice overview
+            Quote overview
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-ink">
-            {invoice.invoice_number}
+            Quote {quote.id.slice(0, 8).toUpperCase()}
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={invoice.status}>{invoice.status}</Badge>
+          <Badge variant={quote.status}>{quote.status}</Badge>
           {actions}
         </div>
       </div>
@@ -94,10 +92,10 @@ export function InvoiceDocument({
             </div>
 
             <div className="grid gap-3 rounded-3xl border border-slate-200 bg-white/80 p-5 text-sm sm:grid-cols-2">
-              <MetaItem label="Invoice number" value={invoice.invoice_number} />
-              <MetaItem label="Invoice date" value={formatDate(invoice.created_at)} />
-              <MetaItem label="Due date" value={formatDate(invoice.due_date)} />
-              <MetaItem label="Status" value={invoice.status} />
+              <MetaItem label="Quote reference" value={quote.id.slice(0, 8).toUpperCase()} />
+              <MetaItem label="Quote date" value={formatDate(quote.created_at)} />
+              <MetaItem label="Status" value={quote.status} />
+              <MetaItem label="Quoted total" value={currency(Number(quote.total))} />
             </div>
           </div>
         </div>
@@ -105,7 +103,7 @@ export function InvoiceDocument({
         <div className="grid gap-6 border-b border-slate-200 px-6 py-6 sm:px-8 lg:grid-cols-2">
           <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Bill to
+              Prepared for
             </p>
             <h3 className="mt-2 text-lg font-semibold text-ink">{customer.name}</h3>
             <div className="mt-3 space-y-1 text-sm text-slate-500">
@@ -117,29 +115,12 @@ export function InvoiceDocument({
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Payment instructions
+              Next steps
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-500">
               {business.payment_instructions ??
-                "Please pay by the due date and use the invoice number as your payment reference."}
+                "Review the quote and accept it if you would like the business to proceed. You can reply to the sender if any changes are needed."}
             </p>
-            {business.bank_name ||
-            business.bank_account_name ||
-            business.bank_account_number ||
-            business.bank_branch_code ? (
-              <div className="mt-4 space-y-1 text-sm text-slate-500">
-                {business.bank_name ? <p>Bank: {business.bank_name}</p> : null}
-                {business.bank_account_name ? (
-                  <p>Account name: {business.bank_account_name}</p>
-                ) : null}
-                {business.bank_account_number ? (
-                  <p>Account number: {business.bank_account_number}</p>
-                ) : null}
-                {business.bank_branch_code ? (
-                  <p>Branch code: {business.bank_branch_code}</p>
-                ) : null}
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -155,12 +136,19 @@ export function InvoiceDocument({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {invoice.items?.map((item) => (
+                {quote.items?.map((item) => (
                   <tr
-                    key={item.id ?? item.description}
+                    key={item.id ?? `${item.service?.name}-${item.quantity}`}
                     className="transition hover:bg-slate-50/80"
                   >
-                    <td className="px-6 py-4 font-medium text-ink">{item.description}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-ink">
+                        {item.service?.name ?? "Service"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {item.service?.description ?? ""}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-slate-500">{item.quantity}</td>
                     <td className="px-6 py-4 text-slate-500">
                       {currency(Number(item.price))}
@@ -176,11 +164,11 @@ export function InvoiceDocument({
 
           <div className="mt-6 flex flex-col gap-4 rounded-3xl bg-[#0b1020] px-6 py-5 text-white sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm text-slate-300">Amount due</p>
-              <p className="mt-1 text-3xl font-semibold">{currency(Number(invoice.total))}</p>
+              <p className="text-sm text-slate-300">Quoted total</p>
+              <p className="mt-1 text-3xl font-semibold">{currency(Number(quote.total))}</p>
             </div>
             <div className="text-sm text-slate-300">
-              Due by {formatDate(invoice.due_date)}
+              Prepared on {formatDate(quote.created_at)}
             </div>
           </div>
         </div>

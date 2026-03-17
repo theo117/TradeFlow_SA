@@ -8,7 +8,7 @@ import { currency, formatDate } from "@/lib/utils";
 type RecentQuote = {
   id: string;
   total: number | string;
-  status: "draft" | "sent";
+  status: "draft" | "sent" | "accepted";
   created_at: string;
   customer?: {
     name?: string | null;

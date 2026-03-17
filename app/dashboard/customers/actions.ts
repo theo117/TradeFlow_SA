@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { requireBusiness } from "@/lib/auth";
+import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { customerSchema } from "@/lib/validations";
 
 export async function createCustomer(formData: FormData) {
   try {
-    const business = await requireBusiness();
+    const business = await requirePaidBusiness();
     const payload = customerSchema.parse({
       name: formData.get("name"),
       email: formData.get("email"),
@@ -42,7 +42,7 @@ export async function createCustomer(formData: FormData) {
 
 export async function updateCustomer(customerId: string, formData: FormData) {
   try {
-    const business = await requireBusiness();
+    const business = await requirePaidBusiness();
     const payload = customerSchema.parse({
       name: formData.get("name"),
       email: formData.get("email"),
@@ -81,7 +81,7 @@ export async function updateCustomer(customerId: string, formData: FormData) {
 }
 
 export async function deleteCustomer(formData: FormData) {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   const customerId = String(formData.get("customerId"));
 
   try {

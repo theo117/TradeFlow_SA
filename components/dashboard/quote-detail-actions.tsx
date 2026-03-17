@@ -6,6 +6,7 @@ import { useState } from "react";
 import { convertQuoteToInvoice } from "@/app/dashboard/invoices/actions";
 import { deleteQuote, updateQuoteStatus } from "@/app/dashboard/quotes/actions";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { EmailShareButton } from "@/components/dashboard/email-share-button";
 import { PendingButton } from "@/components/forms/pending-button";
 import { InlineToast, type InlineToastState } from "@/components/feedback/inline-toast";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,11 +16,15 @@ export function QuoteDetailActions({
   quoteId,
   status,
   defaultDueDate,
+  emailHref,
+  publicHref,
   existingInvoice
 }: {
   quoteId: string;
-  status: "draft" | "sent";
+  status: "draft" | "sent" | "accepted";
   defaultDueDate: string;
+  emailHref?: string | null;
+  publicHref: string;
   existingInvoice?: {
     id: string;
     invoice_number: string;
@@ -33,6 +38,10 @@ export function QuoteDetailActions({
   const [toast, setToast] = useState<InlineToastState>(null);
 
   async function handleStatus() {
+    if (currentStatus === "accepted") {
+      return;
+    }
+
     const nextStatus = currentStatus === "draft" ? "sent" : "draft";
     setPending("status");
     setCurrentStatus(nextStatus);
@@ -73,24 +82,39 @@ export function QuoteDetailActions({
     <>
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleStatus}
-            disabled={pending !== null}
-          >
-            {pending === "status"
-              ? "Updating..."
-              : currentStatus === "draft"
-                ? "Mark as sent"
-                : "Move to draft"}
-          </Button>
+          {currentStatus !== "accepted" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleStatus}
+              disabled={pending !== null}
+            >
+              {pending === "status"
+                ? "Updating..."
+                : currentStatus === "draft"
+                  ? "Mark as sent"
+                  : "Move to draft"}
+            </Button>
+          ) : null}
           <Link
             href="/dashboard/quotes"
             className={buttonVariants({ variant: "secondary" })}
           >
             Back to quotes
           </Link>
+          <Link
+            href={`/api/quotes/${quoteId}/pdf`}
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            Download PDF
+          </Link>
+          <Link
+            href={publicHref}
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            Open public quote
+          </Link>
+          <EmailShareButton href={emailHref} />
           {existingInvoice ? (
             <Link
               href={`/dashboard/invoices/${existingInvoice.id}`}
@@ -132,9 +156,13 @@ export function QuoteDetailActions({
           <p className="text-sm text-slate-500">
             Quote already converted to {existingInvoice.invoice_number}.
           </p>
+        ) : currentStatus === "accepted" ? (
+          <p className="text-sm text-emerald-700">
+            This quote has been accepted and is ready to convert into an invoice.
+          </p>
         ) : (
           <p className="text-sm text-slate-500">
-            Set a due date and convert this quote into a customer-facing invoice.
+            Send the public quote link to your customer, then convert it into an invoice once accepted.
           </p>
         )}
       </div>

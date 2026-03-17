@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import {
   BriefcaseBusiness,
   ChevronLeft,
+  CreditCard,
   FileText,
   LayoutDashboard,
   LogOut,
   ReceiptText,
+  Settings,
   Users
 } from "lucide-react";
 import { logout } from "@/app/(auth)/actions";
@@ -20,7 +22,9 @@ const links = [
   { href: "/dashboard/customers", label: "Customers", icon: Users },
   { href: "/dashboard/services", label: "Services", icon: BriefcaseBusiness },
   { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
-  { href: "/dashboard/invoices", label: "Invoices", icon: ReceiptText }
+  { href: "/dashboard/invoices", label: "Invoices", icon: ReceiptText },
+  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings }
 ];
 
 export function Sidebar({
@@ -72,7 +76,7 @@ export function Sidebar({
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">This week</p>
           <p className="mt-2 text-2xl font-semibold text-white">Focus mode</p>
           <p className="mt-2 text-sm text-slate-300">
-            Keep quotes moving, invoices collected, and customer data clean from one workspace.
+            Keep quotes moving, invoices collected, and customer records organised in one place.
           </p>
         </div>
 

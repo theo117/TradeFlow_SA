@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { InvoiceDetailActions } from "@/components/dashboard/invoice-detail-actions";
 import { InvoiceDocument } from "@/components/dashboard/invoice-document";
-import { buildWhatsappInvoiceUrl, getInvoicePublicUrl } from "@/lib/invoices";
+import {
+  buildWhatsappInvoiceUrl,
+  getInvoicePdfUrl,
+  getInvoicePublicUrl
+} from "@/lib/invoices";
+import { buildInvoiceEmailUrl } from "@/lib/sharing";
 import { getInvoiceById } from "@/lib/queries";
 
 export default async function InvoiceDetailPage({
@@ -18,6 +23,17 @@ export default async function InvoiceDetailPage({
 
   const pdfHref = `/api/invoices/${invoice.id}/pdf`;
   const publicUrl = getInvoicePublicUrl(invoice.id);
+  const emailHref = invoice.customer.email
+    ? buildInvoiceEmailUrl({
+        email: invoice.customer.email,
+        customerName: invoice.customer.name,
+        invoiceNumber: invoice.invoice_number,
+        businessName: invoice.business.name,
+        total: Number(invoice.total),
+        invoiceUrl: publicUrl,
+        pdfUrl: getInvoicePdfUrl(invoice.id)
+      })
+    : null;
   const whatsappHref = invoice.customer.phone
     ? buildWhatsappInvoiceUrl({
         phone: invoice.customer.phone,
@@ -39,6 +55,7 @@ export default async function InvoiceDetailPage({
           invoiceId={invoice.id}
           status={invoice.status}
           pdfHref={pdfHref}
+          emailHref={emailHref}
           whatsappHref={whatsappHref}
         />
       }

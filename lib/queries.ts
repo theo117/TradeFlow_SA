@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
-import { requireBusiness } from "@/lib/auth";
+import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   businesses,
@@ -21,7 +21,20 @@ function mapBusiness(row: {
   phone: string | null;
   address: string | null;
   logoUrl: string | null;
+  vatNumber: string | null;
+  registrationNumber: string | null;
+  bankName: string | null;
+  bankAccountName: string | null;
+  bankAccountNumber: string | null;
+  bankBranchCode: string | null;
   paymentInstructions: string | null;
+  billingProvider: string | null;
+  billingCustomerId: string | null;
+  billingSubscriptionId: string | null;
+  billingPlanId: string | null;
+  subscriptionStatus: string;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
   createdAt: string;
 }) {
   return {
@@ -32,7 +45,20 @@ function mapBusiness(row: {
     phone: row.phone,
     address: row.address,
     logo_url: row.logoUrl,
+    vat_number: row.vatNumber,
+    registration_number: row.registrationNumber,
+    bank_name: row.bankName,
+    bank_account_name: row.bankAccountName,
+    bank_account_number: row.bankAccountNumber,
+    bank_branch_code: row.bankBranchCode,
     payment_instructions: row.paymentInstructions,
+    billing_provider: row.billingProvider,
+    billing_customer_id: row.billingCustomerId,
+    billing_subscription_id: row.billingSubscriptionId,
+    billing_plan_id: row.billingPlanId,
+    subscription_status: row.subscriptionStatus,
+    current_period_end: row.currentPeriodEnd,
+    trial_ends_at: row.trialEndsAt,
     created_at: row.createdAt
   };
 }
@@ -74,7 +100,7 @@ function mapService(row: {
 }
 
 export const getDashboardMetrics = cache(async () => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   await syncOverdueInvoices(business.id);
 
   const [
@@ -157,7 +183,7 @@ export const getDashboardMetrics = cache(async () => {
 });
 
 export const getCustomers = cache(async () => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   const rows = await db
     .select()
@@ -169,7 +195,7 @@ export const getCustomers = cache(async () => {
 });
 
 export const getCustomerById = cache(async (id: string) => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   const [row] = await db
     .select()
@@ -181,7 +207,7 @@ export const getCustomerById = cache(async (id: string) => {
 });
 
 export const getServices = cache(async () => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   const rows = await db
     .select()
@@ -193,7 +219,7 @@ export const getServices = cache(async () => {
 });
 
 export const getServiceById = cache(async (id: string) => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   const [row] = await db
     .select()
@@ -205,7 +231,7 @@ export const getServiceById = cache(async (id: string) => {
 });
 
 export const getQuotes = cache(async () => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
 
   const rows = await db
     .select({
@@ -247,9 +273,7 @@ export const getQuotes = cache(async () => {
   }));
 });
 
-export const getQuoteById = cache(async (id: string) => {
-  const business = await requireBusiness();
-
+async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<typeof eq>) {
   const [quoteRow] = await db
     .select({
       id: quotes.id,
@@ -258,6 +282,30 @@ export const getQuoteById = cache(async (id: string) => {
       status: quotes.status,
       total: quotes.total,
       createdAt: quotes.createdAt,
+      business: {
+        id: businesses.id,
+        ownerId: businesses.ownerId,
+        name: businesses.name,
+        email: businesses.email,
+        phone: businesses.phone,
+        address: businesses.address,
+        logoUrl: businesses.logoUrl,
+        vatNumber: businesses.vatNumber,
+        registrationNumber: businesses.registrationNumber,
+        bankName: businesses.bankName,
+        bankAccountName: businesses.bankAccountName,
+        bankAccountNumber: businesses.bankAccountNumber,
+        bankBranchCode: businesses.bankBranchCode,
+        paymentInstructions: businesses.paymentInstructions,
+        billingProvider: businesses.billingProvider,
+        billingCustomerId: businesses.billingCustomerId,
+        billingSubscriptionId: businesses.billingSubscriptionId,
+        billingPlanId: businesses.billingPlanId,
+        subscriptionStatus: businesses.subscriptionStatus,
+        currentPeriodEnd: businesses.currentPeriodEnd,
+        trialEndsAt: businesses.trialEndsAt,
+        createdAt: businesses.createdAt
+      },
       customer: {
         id: customers.id,
         businessId: customers.businessId,
@@ -269,8 +317,9 @@ export const getQuoteById = cache(async (id: string) => {
       }
     })
     .from(quotes)
+    .innerJoin(businesses, eq(quotes.businessId, businesses.id))
     .leftJoin(customers, eq(quotes.customerId, customers.id))
-    .where(and(eq(quotes.businessId, business.id), eq(quotes.id, id)))
+    .where(whereClause)
     .limit(1);
 
   if (!quoteRow) {
@@ -295,7 +344,7 @@ export const getQuoteById = cache(async (id: string) => {
     })
     .from(quoteItems)
     .leftJoin(services, eq(quoteItems.serviceId, services.id))
-    .where(eq(quoteItems.quoteId, id));
+    .where(eq(quoteItems.quoteId, quoteRow.id));
 
   return {
     id: quoteRow.id,
@@ -304,6 +353,7 @@ export const getQuoteById = cache(async (id: string) => {
     status: quoteRow.status,
     total: quoteRow.total,
     created_at: quoteRow.createdAt,
+    business: mapBusiness(quoteRow.business),
     customer: quoteRow.customer?.id ? mapCustomer(quoteRow.customer) : null,
     items: itemRows.map((item) => ({
       id: item.id,
@@ -321,10 +371,19 @@ export const getQuoteById = cache(async (id: string) => {
         : null
     }))
   };
+}
+
+export const getQuoteById = cache(async (id: string) => {
+  const business = await requirePaidBusiness();
+  return getQuoteDetail(and(eq(quotes.businessId, business.id), eq(quotes.id, id)));
+});
+
+export const getPublicQuoteById = cache(async (id: string) => {
+  return getQuoteDetail(eq(quotes.id, id));
 });
 
 export const getInvoiceByQuoteId = cache(async (quoteId: string) => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   await syncOverdueInvoices(business.id);
 
   const [row] = await db
@@ -343,7 +402,7 @@ export const getInvoiceByQuoteId = cache(async (quoteId: string) => {
 });
 
 export const getInvoices = cache(async () => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   await syncOverdueInvoices(business.id);
 
   const rows = await db
@@ -412,7 +471,20 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
         phone: businesses.phone,
         address: businesses.address,
         logoUrl: businesses.logoUrl,
+        vatNumber: businesses.vatNumber,
+        registrationNumber: businesses.registrationNumber,
+        bankName: businesses.bankName,
+        bankAccountName: businesses.bankAccountName,
+        bankAccountNumber: businesses.bankAccountNumber,
+        bankBranchCode: businesses.bankBranchCode,
         paymentInstructions: businesses.paymentInstructions,
+        billingProvider: businesses.billingProvider,
+        billingCustomerId: businesses.billingCustomerId,
+        billingSubscriptionId: businesses.billingSubscriptionId,
+        billingPlanId: businesses.billingPlanId,
+        subscriptionStatus: businesses.subscriptionStatus,
+        currentPeriodEnd: businesses.currentPeriodEnd,
+        trialEndsAt: businesses.trialEndsAt,
         createdAt: businesses.createdAt
       },
       customer: {
@@ -488,7 +560,7 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
 }
 
 export const getInvoiceById = cache(async (id: string) => {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   await syncOverdueInvoices(business.id);
 
   return getInvoiceDetail(and(eq(invoices.businessId, business.id), eq(invoices.id, id)));

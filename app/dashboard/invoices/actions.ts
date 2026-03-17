@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { requireBusiness } from "@/lib/auth";
+import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   invoiceItems,
@@ -27,7 +27,7 @@ export async function convertQuoteToInvoice(formData: FormData) {
       dueDate: formData.get("dueDate") ?? getDefaultInvoiceDueDate()
     });
 
-    const business = await requireBusiness();
+    const business = await requirePaidBusiness();
 
     const [existingInvoice] = await db
       .select({ id: invoices.id })
@@ -129,7 +129,7 @@ export async function updateInvoiceStatus(
   invoiceId: string,
   nextStatus: "draft" | "sent" | "paid" | "overdue"
 ) {
-  const business = await requireBusiness();
+  const business = await requirePaidBusiness();
   const status = invoiceStatusSchema.parse(nextStatus);
 
   try {
