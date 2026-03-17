@@ -50,7 +50,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[290px] flex-col border-r border-slate-200 bg-[#0b1020] px-5 py-6 text-white transition duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[290px] flex-col overflow-y-auto border-r border-slate-200 bg-[#0b1020] px-5 py-6 text-white transition duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -80,7 +80,7 @@ export function Sidebar({
           </p>
         </div>
 
-        <nav className="space-y-1.5">
+        <nav className="space-y-1.5 pb-6">
           {links.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/dashboard"
