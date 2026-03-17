@@ -27,28 +27,42 @@ export function LoginForm({
     const password = String(formData.get("password") ?? "");
     const redirectTo = next && next.startsWith("/") ? next : "/dashboard";
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      redirectTo
-    });
+    try {
+      const result = await Promise.race([
+        signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+          redirectTo
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("timeout")), 10000);
+        })
+      ]);
 
-    if (!result || result.error || !result.ok) {
-      setError("Invalid email or password");
+      if (!result || result.error || !result.ok) {
+        setError("Invalid email or password");
+        setPending(false);
+        return;
+      }
+
+      const session = await waitForSession();
+
+      if (!session?.user?.email) {
+        setError("Login did not create a session. Please refresh and try again.");
+        setPending(false);
+        return;
+      }
+
+      window.location.assign(result.url ?? redirectTo);
+    } catch (error) {
+      setError(
+        error instanceof Error && error.message === "timeout"
+          ? "Login request timed out. This usually means the live auth endpoint is failing."
+          : "Login failed. Please try again."
+      );
       setPending(false);
-      return;
     }
-
-    const session = await waitForSession();
-
-    if (!session?.user?.email) {
-      setError("Login did not create a session. Please refresh and try again.");
-      setPending(false);
-      return;
-    }
-
-    window.location.assign(result.url ?? redirectTo);
   }
 
   return (
