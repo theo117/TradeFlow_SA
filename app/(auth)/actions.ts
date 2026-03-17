@@ -5,6 +5,7 @@ import { AuthError } from "next-auth";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { signIn, signOut } from "@/auth";
+import { normalizeRedirectTarget } from "@/lib/workflows";
 import { db } from "@/lib/db";
 import { businesses, users } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/password";
@@ -98,14 +99,4 @@ export async function logout() {
   await signOut({
     redirectTo: "/login"
   });
-}
-
-function normalizeRedirectTarget(value: FormDataEntryValue | null) {
-  const fallback = "/dashboard";
-
-  if (typeof value !== "string" || value.length === 0) {
-    return fallback;
-  }
-
-  return value.startsWith("/") ? value : fallback;
 }

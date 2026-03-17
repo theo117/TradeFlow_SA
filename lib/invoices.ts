@@ -83,3 +83,34 @@ export function buildWhatsappInvoiceUrl({
 
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
 }
+
+export function buildWhatsappInvoiceReminderUrl({
+  phone,
+  customerName,
+  invoiceNumber,
+  businessName,
+  total,
+  invoiceUrl
+}: {
+  phone: string;
+  customerName: string;
+  invoiceNumber: string;
+  businessName: string;
+  total: number;
+  invoiceUrl: string;
+}) {
+  const normalizedPhone = normalizeWhatsappPhone(phone);
+  const message = [
+    `Hello ${customerName},`,
+    "",
+    `This is a reminder about invoice #${invoiceNumber} from ${businessName}.`,
+    `Amount due: ${currency(total)}`,
+    "",
+    "View your invoice here:",
+    invoiceUrl,
+    "",
+    "Thank you."
+  ].join("\n");
+
+  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+}

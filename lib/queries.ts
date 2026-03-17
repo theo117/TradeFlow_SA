@@ -3,6 +3,7 @@ import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  activityEvents,
   businesses,
   customers,
   invoiceItems,
@@ -204,6 +205,89 @@ export const getCustomerById = cache(async (id: string) => {
     .limit(1);
 
   return row ? mapCustomer(row) : null;
+});
+
+export const getCustomerActivity = cache(async (id: string) => {
+  const business = await requirePaidBusiness();
+
+  const rows = await db
+    .select()
+    .from(activityEvents)
+    .where(
+      and(eq(activityEvents.businessId, business.id), eq(activityEvents.customerId, id))
+    )
+    .orderBy(desc(activityEvents.createdAt))
+    .limit(25);
+
+  return rows.map((row) => ({
+    id: row.id,
+    business_id: row.businessId,
+    customer_id: row.customerId,
+    quote_id: row.quoteId,
+    invoice_id: row.invoiceId,
+    type: row.type,
+    description: row.description,
+    channel: row.channel,
+    created_at: row.createdAt
+  }));
+});
+
+export const getCustomerDetail = cache(async (id: string) => {
+  const business = await requirePaidBusiness();
+  await syncOverdueInvoices(business.id);
+
+  const customer = await getCustomerById(id);
+
+  if (!customer) {
+    return null;
+  }
+
+  const [quoteRows, invoiceRows, activity] = await Promise.all([
+    db
+      .select({
+        id: quotes.id,
+        status: quotes.status,
+        total: quotes.total,
+        createdAt: quotes.createdAt
+      })
+      .from(quotes)
+      .where(and(eq(quotes.businessId, business.id), eq(quotes.customerId, id)))
+      .orderBy(desc(quotes.createdAt))
+      .limit(10),
+    db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        status: invoices.status,
+        total: invoices.total,
+        dueDate: invoices.dueDate,
+        createdAt: invoices.createdAt
+      })
+      .from(invoices)
+      .where(and(eq(invoices.businessId, business.id), eq(invoices.customerId, id)))
+      .orderBy(desc(invoices.createdAt))
+      .limit(10),
+    getCustomerActivity(id)
+  ]);
+
+  return {
+    customer,
+    quotes: quoteRows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      total: row.total,
+      created_at: row.createdAt
+    })),
+    invoices: invoiceRows.map((row) => ({
+      id: row.id,
+      invoice_number: row.invoiceNumber,
+      status: row.status,
+      total: row.total,
+      due_date: row.dueDate,
+      created_at: row.createdAt
+    })),
+    activity
+  };
 });
 
 export const getServices = cache(async () => {

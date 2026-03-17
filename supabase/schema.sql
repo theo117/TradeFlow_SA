@@ -122,6 +122,18 @@ create table if not exists public.invoice_items (
   subtotal numeric(12, 2) not null default 0
 );
 
+create table if not exists public.activity_events (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  customer_id uuid references public.customers (id) on delete cascade,
+  quote_id uuid references public.quotes (id) on delete set null,
+  invoice_id uuid references public.invoices (id) on delete set null,
+  type text not null,
+  description text not null,
+  channel text,
+  created_at timestamptz not null default now()
+);
+
 create unique index if not exists users_email_idx on public.users (email);
 create unique index if not exists businesses_owner_id_idx on public.businesses (owner_id);
 create unique index if not exists businesses_billing_customer_id_idx on public.businesses (billing_customer_id);
@@ -137,3 +149,8 @@ create index if not exists invoices_customer_id_idx on public.invoices (customer
 create index if not exists invoices_due_date_idx on public.invoices (due_date);
 create index if not exists invoices_status_idx on public.invoices (status);
 create index if not exists invoice_items_invoice_id_idx on public.invoice_items (invoice_id);
+create index if not exists activity_events_business_id_idx on public.activity_events (business_id);
+create index if not exists activity_events_customer_id_idx on public.activity_events (customer_id);
+create index if not exists activity_events_quote_id_idx on public.activity_events (quote_id);
+create index if not exists activity_events_invoice_id_idx on public.activity_events (invoice_id);
+create index if not exists activity_events_created_at_idx on public.activity_events (created_at);

@@ -66,6 +66,18 @@ export type Invoice = {
   items?: InvoiceItem[];
 };
 
+export type ActivityEvent = {
+  id: string;
+  business_id: string;
+  customer_id: string | null;
+  quote_id: string | null;
+  invoice_id: string | null;
+  type: string;
+  description: string;
+  channel: string | null;
+  created_at: string;
+};
+
 export type Business = {
   id: string;
   owner_id: string;

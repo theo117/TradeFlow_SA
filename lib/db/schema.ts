@@ -248,3 +248,37 @@ export const invoiceItems = pgTable(
     invoiceIdx: index("invoice_items_invoice_id_idx").on(table.invoiceId)
   })
 );
+
+export const activityEvents = pgTable(
+  "activity_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .references(() => customers.id, { onDelete: "cascade" }),
+    quoteId: uuid("quote_id").references(() => quotes.id, {
+      onDelete: "set null"
+    }),
+    invoiceId: uuid("invoice_id").references(() => invoices.id, {
+      onDelete: "set null"
+    }),
+    type: text("type").notNull(),
+    description: text("description").notNull(),
+    channel: text("channel"),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    businessIdx: index("activity_events_business_id_idx").on(table.businessId),
+    customerIdx: index("activity_events_customer_id_idx").on(table.customerId),
+    quoteIdx: index("activity_events_quote_id_idx").on(table.quoteId),
+    invoiceIdx: index("activity_events_invoice_id_idx").on(table.invoiceId),
+    createdAtIdx: index("activity_events_created_at_idx").on(table.createdAt)
+  })
+);

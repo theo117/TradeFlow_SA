@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requirePaidBusiness } from "@/lib/auth";
+import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { customerSchema } from "@/lib/validations";
@@ -19,12 +20,19 @@ export async function createCustomer(formData: FormData) {
       address: formData.get("address")
     });
 
-    await db.insert(customers).values({
+    const [customer] = await db.insert(customers).values({
       businessId: business.id,
       name: payload.name,
       email: payload.email || null,
       phone: payload.phone || null,
       address: payload.address || null
+    }).returning({ id: customers.id, name: customers.name });
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: customer.id,
+      type: "customer.created",
+      description: `Customer ${customer.name} was created.`
     });
 
     revalidatePath("/dashboard/customers");
@@ -61,11 +69,18 @@ export async function updateCustomer(customerId: string, formData: FormData) {
       .where(
         and(eq(customers.businessId, business.id), eq(customers.id, customerId))
       )
-      .returning({ id: customers.id });
+      .returning({ id: customers.id, name: customers.name });
 
     if (!updatedCustomer) {
       redirect(`/dashboard/customers/${customerId}/edit?error=Customer%20not%20found`);
     }
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: updatedCustomer.id,
+      type: "customer.updated",
+      description: `Customer ${updatedCustomer.name} was updated.`
+    });
 
     revalidatePath("/dashboard/customers");
     redirect("/dashboard/customers?success=Customer%20updated");

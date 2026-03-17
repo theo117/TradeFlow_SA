@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requirePaidBusiness } from "@/lib/auth";
+import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { customers, quoteItems, quotes, services } from "@/lib/db/schema";
 import { quoteSchema } from "@/lib/validations";
+import { calculateQuoteTotal } from "@/lib/workflows";
 
 export async function createQuote(formData: FormData) {
   try {
@@ -20,7 +22,7 @@ export async function createQuote(formData: FormData) {
       items
     });
 
-    const total = payload.items.reduce((sum, item) => sum + item.subtotal, 0);
+    const total = calculateQuoteTotal(payload.items);
     const [customer] = await db
       .select({ id: customers.id })
       .from(customers)
@@ -60,7 +62,7 @@ export async function createQuote(formData: FormData) {
           status: payload.status,
           total
         })
-        .returning({ id: quotes.id });
+        .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
 
       await tx.insert(quoteItems).values(
         payload.items.map((item) => ({
@@ -73,6 +75,14 @@ export async function createQuote(formData: FormData) {
       );
 
       return createdQuote;
+    });
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: quote.customerId,
+      quoteId: quote.id,
+      type: "quote.created",
+      description: `Quote ${quote.id.slice(0, 8).toUpperCase()} was created with status ${quote.status}.`
     });
 
     revalidatePath("/dashboard");
@@ -100,7 +110,7 @@ export async function updateQuoteStatus(
       .update(quotes)
       .set({ status })
       .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
-      .returning({ id: quotes.id });
+      .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/quotes");
@@ -112,6 +122,14 @@ export async function updateQuoteStatus(
         message: "Quote not found"
       };
     }
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: updatedQuote.customerId,
+      quoteId: updatedQuote.id,
+      type: "quote.status_updated",
+      description: `Quote ${updatedQuote.id.slice(0, 8).toUpperCase()} was marked as ${updatedQuote.status}.`
+    });
 
     return {
       error: false,

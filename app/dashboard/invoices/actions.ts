@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requirePaidBusiness } from "@/lib/auth";
+import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import {
   invoiceItems,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 import { getDefaultInvoiceDueDate } from "@/lib/invoices";
 import { convertQuoteToInvoiceSchema, invoiceStatusSchema } from "@/lib/validations";
+import { buildInvoiceItemsFromQuoteItems } from "@/lib/workflows";
 
 export async function convertQuoteToInvoice(formData: FormData) {
   const redirectTo = String(
@@ -91,10 +93,10 @@ export async function convertQuoteToInvoice(formData: FormData) {
         .returning({ id: invoices.id });
 
       await tx.insert(invoiceItems).values(
-        items.map((item) => ({
+        buildInvoiceItemsFromQuoteItems(items).map((item) => ({
           invoiceId: createdInvoice.id,
           serviceId: item.serviceId,
-          description: item.service?.name ?? item.service?.description ?? "Service",
+          description: item.description,
           quantity: item.quantity,
           price: item.price,
           subtotal: item.subtotal
@@ -102,6 +104,15 @@ export async function convertQuoteToInvoice(formData: FormData) {
       );
 
       return createdInvoice;
+    });
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: quote.customerId,
+      quoteId: quote.id,
+      invoiceId: invoice.id,
+      type: "invoice.created",
+      description: `Invoice was created from quote ${quote.id.slice(0, 8).toUpperCase()}.`
     });
 
     revalidatePath("/dashboard");
@@ -137,7 +148,7 @@ export async function updateInvoiceStatus(
       .update(invoices)
       .set({ status })
       .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
-      .returning({ id: invoices.id });
+      .returning({ id: invoices.id, customerId: invoices.customerId, status: invoices.status });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/invoices");
@@ -150,6 +161,14 @@ export async function updateInvoiceStatus(
       };
     }
 
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: updatedInvoice.customerId,
+      invoiceId: updatedInvoice.id,
+      type: "invoice.status_updated",
+      description: `Invoice status was updated to ${updatedInvoice.status}.`
+    });
+
     return {
       error: false,
       message:
@@ -161,6 +180,65 @@ export async function updateInvoiceStatus(
     return {
       error: true,
       message: error instanceof Error ? error.message : "Unable to update invoice"
+    };
+  }
+}
+
+export async function recordInvoiceReminder(
+  invoiceId: string,
+  channel: "email" | "whatsapp"
+) {
+  const business = await requirePaidBusiness();
+
+  try {
+    const [invoice] = await db
+      .select({
+        id: invoices.id,
+        customerId: invoices.customerId,
+        status: invoices.status
+      })
+      .from(invoices)
+      .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+      .limit(1);
+
+    if (!invoice) {
+      return {
+        error: true,
+        message: "Invoice not found"
+      };
+    }
+
+    if (invoice.status === "draft") {
+      await db
+        .update(invoices)
+        .set({ status: "sent" })
+        .where(eq(invoices.id, invoice.id));
+    }
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: invoice.customerId,
+      invoiceId: invoice.id,
+      type: "invoice.reminder_sent",
+      channel,
+      description: `Invoice reminder was prepared via ${channel}.`
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/invoices");
+    revalidatePath(`/dashboard/invoices/${invoice.id}`);
+
+    return {
+      error: false,
+      message:
+        channel === "email"
+          ? "Invoice email prepared"
+          : "Invoice WhatsApp reminder prepared"
+    };
+  } catch (error) {
+    return {
+      error: true,
+      message: error instanceof Error ? error.message : "Unable to prepare reminder"
     };
   }
 }

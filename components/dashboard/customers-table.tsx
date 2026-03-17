@@ -147,6 +147,12 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
                       <Link
+                        href={`/dashboard/customers/${customer.id}`}
+                        className={buttonVariants({ variant: "secondary" })}
+                      >
+                        View
+                      </Link>
+                      <Link
                         href={`/dashboard/customers/${customer.id}/edit`}
                         className={buttonVariants({ variant: "secondary" })}
                       >
@@ -209,6 +215,12 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
               </div>
 
               <div className="flex gap-2">
+                <Link
+                  href={`/dashboard/customers/${customer.id}`}
+                  className={buttonVariants({ variant: "secondary" })}
+                >
+                  View
+                </Link>
                 <Link
                   href={`/dashboard/customers/${customer.id}/edit`}
                   className={buttonVariants({ variant: "secondary" })}

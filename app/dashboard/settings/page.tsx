@@ -41,6 +41,27 @@ export default async function SettingsPage({
           title="Business profile"
           description="These details appear on invoices and can be used on quote documents."
         >
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <p className="text-sm font-medium text-ink">Branding and logo</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Upload your company logo here. It will be used on invoice PDFs, quote PDFs, and shared quote or invoice views.
+            </p>
+            {business.logo_url ? (
+              <div className="mt-4">
+                <p className="text-sm text-slate-500">Current logo</p>
+                <Image
+                  src={business.logo_url}
+                  alt={`${business.name} logo`}
+                  width={160}
+                  height={64}
+                  className="mt-3 h-16 w-auto rounded-xl object-contain"
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">No logo uploaded yet.</p>
+            )}
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <Field htmlFor="name" label="Business name">
               <Input id="name" name="name" defaultValue={business.name} required />
@@ -122,18 +143,6 @@ export default async function SettingsPage({
               defaultValue={business.payment_instructions ?? ""}
             />
           </Field>
-          {business.logo_url ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-sm text-slate-500">Current logo</p>
-              <Image
-                src={business.logo_url}
-                alt={`${business.name} logo`}
-                width={160}
-                height={64}
-                className="mt-3 h-16 w-auto rounded-xl object-contain"
-              />
-            </div>
-          ) : null}
         </FormSection>
 
         <PendingButton pendingLabel="Saving settings...">

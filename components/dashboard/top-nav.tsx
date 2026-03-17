@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { logout } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 
 export function TopNav({
@@ -38,6 +39,17 @@ export function TopNav({
           >
             <Bell className="h-4 w-4" />
           </button>
+
+          <form action={logout}>
+            <Button
+              type="submit"
+              variant="secondary"
+              className="gap-2 rounded-xl"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </form>
 
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
             <div className="hidden text-right sm:block">

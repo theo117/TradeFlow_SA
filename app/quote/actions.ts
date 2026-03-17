@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
+import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { quotes } from "@/lib/db/schema";
 
@@ -16,6 +17,8 @@ export async function acceptQuote(formData: FormData) {
   const [quote] = await db
     .select({
       id: quotes.id,
+      businessId: quotes.businessId,
+      customerId: quotes.customerId,
       status: quotes.status
     })
     .from(quotes)
@@ -38,6 +41,14 @@ export async function acceptQuote(formData: FormData) {
     .update(quotes)
     .set({ status: "accepted" })
     .where(eq(quotes.id, quoteId));
+
+  await logActivityEvent({
+    businessId: quote.businessId,
+    customerId: quote.customerId,
+    quoteId: quote.id,
+    type: "quote.accepted",
+    description: `Quote ${quote.id.slice(0, 8).toUpperCase()} was accepted by the customer.`
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/quotes");
