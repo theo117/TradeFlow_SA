@@ -73,7 +73,7 @@ export function Sidebar({
         </div>
 
         <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">This week</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Workspace</p>
           <p className="mt-2 text-2xl font-semibold text-white">Focus mode</p>
           <p className="mt-2 text-sm text-slate-300">
             Keep quotes moving, invoices collected, and customer records organised in one place.
