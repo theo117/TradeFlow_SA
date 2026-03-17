@@ -1,21 +1,27 @@
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { invoices } from "@/lib/db/schema";
 import { currency, getBaseUrl } from "@/lib/utils";
 
 const DEFAULT_INVOICE_DUE_DAYS = 7;
 
 export async function syncOverdueInvoices(businessId?: string | null) {
-  const supabase = await createClient();
-  await supabase.rpc("sync_overdue_invoices", {
-    target_business_id: businessId ?? null
-  });
+  await db
+    .update(invoices)
+    .set({ status: "overdue" })
+    .where(
+      businessId
+        ? and(
+            eq(invoices.businessId, businessId),
+            ne(invoices.status, "paid"),
+            sql`${invoices.dueDate} < current_date`
+          )
+        : and(ne(invoices.status, "paid"), sql`${invoices.dueDate} < current_date`)
+    );
 }
 
 export async function syncOverdueInvoicesAsAdmin(businessId?: string | null) {
-  const supabase = createAdminClient();
-  await supabase.rpc("sync_overdue_invoices", {
-    target_business_id: businessId ?? null
-  });
+  await syncOverdueInvoices(businessId);
 }
 
 export function getDefaultInvoiceDueDate() {

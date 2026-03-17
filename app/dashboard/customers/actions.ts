@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requireBusiness } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { customers } from "@/lib/db/schema";
 import { customerSchema } from "@/lib/validations";
 
 export async function createCustomer(formData: FormData) {
@@ -17,24 +19,22 @@ export async function createCustomer(formData: FormData) {
       address: formData.get("address")
     });
 
-    const supabase = await createClient();
-    const { error } = await supabase.from("customers").insert({
-      business_id: business.id,
+    await db.insert(customers).values({
+      businessId: business.id,
       name: payload.name,
       email: payload.email || null,
       phone: payload.phone || null,
       address: payload.address || null
     });
 
-    if (error) {
-      redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.message)}`);
-    }
-
     revalidatePath("/dashboard/customers");
     redirect("/dashboard/customers?success=Customer%20created");
   } catch (error) {
     if (error instanceof ZodError) {
       redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
+    }
+    if (error instanceof Error) {
+      redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.message)}`);
     }
     throw error;
   }
@@ -50,20 +50,21 @@ export async function updateCustomer(customerId: string, formData: FormData) {
       address: formData.get("address")
     });
 
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("customers")
-      .update({
+    const [updatedCustomer] = await db
+      .update(customers)
+      .set({
         name: payload.name,
         email: payload.email || null,
         phone: payload.phone || null,
         address: payload.address || null
       })
-      .eq("business_id", business.id)
-      .eq("id", customerId);
+      .where(
+        and(eq(customers.businessId, business.id), eq(customers.id, customerId))
+      )
+      .returning({ id: customers.id });
 
-    if (error) {
-      redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.message)}`);
+    if (!updatedCustomer) {
+      redirect(`/dashboard/customers/${customerId}/edit?error=Customer%20not%20found`);
     }
 
     revalidatePath("/dashboard/customers");
@@ -72,6 +73,9 @@ export async function updateCustomer(customerId: string, formData: FormData) {
     if (error instanceof ZodError) {
       redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
+    if (error instanceof Error) {
+      redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.message)}`);
+    }
     throw error;
   }
 }
@@ -79,23 +83,32 @@ export async function updateCustomer(customerId: string, formData: FormData) {
 export async function deleteCustomer(formData: FormData) {
   const business = await requireBusiness();
   const customerId = String(formData.get("customerId"));
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("customers")
-    .delete()
-    .eq("business_id", business.id)
-    .eq("id", customerId);
+  try {
+    const [deletedCustomer] = await db
+      .delete(customers)
+      .where(
+        and(eq(customers.businessId, business.id), eq(customers.id, customerId))
+      )
+      .returning({ id: customers.id });
 
-  revalidatePath("/dashboard/customers");
-  if (error) {
+    revalidatePath("/dashboard/customers");
+
+    if (!deletedCustomer) {
+      return {
+        error: true,
+        message: "Customer not found"
+      };
+    }
+
+    return {
+      error: false,
+      message: "Customer deleted"
+    };
+  } catch (error) {
     return {
       error: true,
-      message: error.message
+      message: error instanceof Error ? error.message : "Unable to delete customer"
     };
   }
-  return {
-    error: false,
-    message: "Customer deleted"
-  };
 }

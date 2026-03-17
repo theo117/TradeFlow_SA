@@ -63,7 +63,7 @@ export function CustomersTable({ customers }: { customers: Customer[] }) {
     paginatedItems,
     totalPages,
     resetSearch
-  } = useListState({
+  } = useListState<Customer, "name" | "email" | "created_at">({
     items: rows,
     pageSize: PAGE_SIZE,
     initialSortKey: "created_at",

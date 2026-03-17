@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requireBusiness } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { customers, quoteItems, quotes, services } from "@/lib/db/schema";
 import { quoteSchema } from "@/lib/validations";
 
 export async function createQuote(formData: FormData) {
@@ -19,36 +21,59 @@ export async function createQuote(formData: FormData) {
     });
 
     const total = payload.items.reduce((sum, item) => sum + item.subtotal, 0);
-    const supabase = await createClient();
+    const [customer] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.businessId, business.id),
+          eq(customers.id, payload.customerId)
+        )
+      )
+      .limit(1);
 
-    const { data: quote, error: quoteError } = await supabase
-      .from("quotes")
-      .insert({
-        business_id: business.id,
-        customer_id: payload.customerId,
-        status: payload.status,
-        total
-      })
-      .select("id")
-      .single();
-
-    if (quoteError || !quote) {
-      redirect(`/dashboard/quotes/new?error=${encodeURIComponent(quoteError?.message ?? "Unable to create quote")}`);
+    if (!customer) {
+      redirect("/dashboard/quotes/new?error=Customer%20not%20found");
     }
 
-    const { error: itemsError } = await supabase.from("quote_items").insert(
-      payload.items.map((item) => ({
-        quote_id: quote.id,
-        service_id: item.service_id,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.subtotal
-      }))
-    );
+    const serviceIds = [...new Set(payload.items.map((item) => item.service_id))];
+    const availableServices = await db
+      .select({ id: services.id })
+      .from(services)
+      .where(
+        and(
+          eq(services.businessId, business.id),
+          inArray(services.id, serviceIds)
+        )
+      );
 
-    if (itemsError) {
-      redirect(`/dashboard/quotes/new?error=${encodeURIComponent(itemsError.message)}`);
+    if (availableServices.length !== serviceIds.length) {
+      redirect("/dashboard/quotes/new?error=One%20or%20more%20services%20are%20invalid");
     }
+
+    const quote = await db.transaction(async (tx) => {
+      const [createdQuote] = await tx
+        .insert(quotes)
+        .values({
+          businessId: business.id,
+          customerId: payload.customerId,
+          status: payload.status,
+          total
+        })
+        .returning({ id: quotes.id });
+
+      await tx.insert(quoteItems).values(
+        payload.items.map((item) => ({
+          quoteId: createdQuote.id,
+          serviceId: item.service_id,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal
+        }))
+      );
+
+      return createdQuote;
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/quotes");
@@ -56,6 +81,9 @@ export async function createQuote(formData: FormData) {
   } catch (error) {
     if (error instanceof ZodError) {
       redirect(`/dashboard/quotes/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
+    }
+    if (error instanceof Error) {
+      redirect(`/dashboard/quotes/new?error=${encodeURIComponent(error.message)}`);
     }
     throw error;
   }
@@ -66,54 +94,65 @@ export async function updateQuoteStatus(
   status: "draft" | "sent"
 ) {
   const business = await requireBusiness();
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("quotes")
-    .update({ status })
-    .eq("business_id", business.id)
-    .eq("id", quoteId);
+  try {
+    const [updatedQuote] = await db
+      .update(quotes)
+      .set({ status })
+      .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
+      .returning({ id: quotes.id });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/quotes");
-  revalidatePath(`/dashboard/quotes/${quoteId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/quotes");
+    revalidatePath(`/dashboard/quotes/${quoteId}`);
 
-  if (error) {
+    if (!updatedQuote) {
+      return {
+        error: true,
+        message: "Quote not found"
+      };
+    }
+
+    return {
+      error: false,
+      message: `Quote marked as ${status}`
+    };
+  } catch (error) {
     return {
       error: true,
-      message: error.message
+      message: error instanceof Error ? error.message : "Unable to update quote"
     };
   }
-
-  return {
-    error: false,
-    message: `Quote marked as ${status}`
-  };
 }
 
 export async function deleteQuote(formData: FormData) {
   const business = await requireBusiness();
   const quoteId = String(formData.get("quoteId"));
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("quotes")
-    .delete()
-    .eq("business_id", business.id)
-    .eq("id", quoteId);
+  try {
+    const [deletedQuote] = await db
+      .delete(quotes)
+      .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
+      .returning({ id: quotes.id });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/quotes");
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/quotes");
 
-  if (error) {
+    if (!deletedQuote) {
+      return {
+        error: true,
+        message: "Quote not found"
+      };
+    }
+
+    return {
+      error: false,
+      message: "Quote deleted"
+    };
+  } catch (error) {
     return {
       error: true,
-      message: error.message
+      message: error instanceof Error ? error.message : "Unable to delete quote"
     };
   }
-
-  return {
-    error: false,
-    message: "Quote deleted"
-  };
 }

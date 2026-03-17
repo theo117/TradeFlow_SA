@@ -103,7 +103,10 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
     paginatedItems,
     totalPages,
     resetSearch
-  } = useListState({
+  } = useListState<
+    InvoiceRow,
+    "due_date" | "total" | "customer" | "invoice_number"
+  >({
     items: filteredRows,
     pageSize: PAGE_SIZE,
     initialSortKey: "due_date",

@@ -57,7 +57,7 @@ export function ServicesTable({ services }: { services: Service[] }) {
     paginatedItems,
     totalPages,
     resetSearch
-  } = useListState({
+  } = useListState<Service, "name" | "price">({
     items: rows,
     pageSize: PAGE_SIZE,
     initialSortKey: "name",

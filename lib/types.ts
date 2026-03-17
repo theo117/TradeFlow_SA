@@ -60,6 +60,7 @@ export type Invoice = {
   total: number;
   due_date: string;
   created_at: string;
+  business?: Business | null;
   customer?: Pick<Customer, "id" | "name" | "email" | "phone" | "address"> | null;
   items?: InvoiceItem[];
 };

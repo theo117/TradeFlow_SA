@@ -1,8 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { AuthError } from "next-auth";
+import { eq } from "drizzle-orm";
+import { signIn, signOut } from "@/auth";
+import { db } from "@/lib/db";
+import { businesses, users } from "@/lib/db/schema";
+import { hashPassword } from "@/lib/password";
 import { loginSchema, registerSchema } from "@/lib/validations";
 
 export async function login(formData: FormData) {
@@ -11,15 +15,19 @@ export async function login(formData: FormData) {
     password: formData.get("password")
   });
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(payload);
+  try {
+    await signIn("credentials", {
+      email: payload.email.toLowerCase(),
+      password: payload.password,
+      redirectTo: "/dashboard"
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect("/login?error=Invalid%20email%20or%20password");
+    }
 
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    throw error;
   }
-
-  revalidatePath("/", "layout");
-  redirect("/dashboard");
 }
 
 export async function register(formData: FormData) {
@@ -29,27 +37,43 @@ export async function register(formData: FormData) {
     password: formData.get("password")
   });
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
-    email: payload.email,
-    password: payload.password
-  });
+  const email = payload.email.toLowerCase();
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
 
-  if (error || !data.user) {
-    redirect(`/register?error=${encodeURIComponent(error?.message ?? "Unable to register")}`);
+  if (existingUser) {
+    redirect("/register?error=An%20account%20with%20that%20email%20already%20exists");
   }
 
-  await supabase.from("businesses").insert({
-    owner_id: data.user.id,
-    name: payload.businessName
+  const passwordHash = await hashPassword(payload.password);
+
+  await db.transaction(async (tx) => {
+    const [user] = await tx
+      .insert(users)
+      .values({
+        email,
+        passwordHash
+      })
+      .returning({ id: users.id });
+
+    await tx.insert(businesses).values({
+      ownerId: user.id,
+      name: payload.businessName
+    });
   });
 
-  revalidatePath("/", "layout");
-  redirect("/dashboard");
+  await signIn("credentials", {
+    email,
+    password: payload.password,
+    redirectTo: "/dashboard"
+  });
 }
 
 export async function logout() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/login");
+  await signOut({
+    redirectTo: "/login"
+  });
 }

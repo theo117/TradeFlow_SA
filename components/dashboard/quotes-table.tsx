@@ -29,6 +29,7 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
   const PAGE_SIZE = 6;
   const [rows, setRows] = useState(quotes);
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "sent">("all");
+  const [statusPendingId, setStatusPendingId] = useState<string | null>(null);
   const filteredRows = useMemo(
     () => rows.filter((quote) => statusFilter === "all" || quote.status === statusFilter),
     [rows, statusFilter]
@@ -91,7 +92,7 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
     paginatedItems,
     totalPages,
     resetSearch
-  } = useListState({
+  } = useListState<QuoteRow, "created_at" | "total" | "customer">({
     items: filteredRows,
     pageSize: PAGE_SIZE,
     initialSortKey: "created_at",
@@ -109,13 +110,14 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
     });
 
   async function handleStatusToggle(quote: QuoteRow) {
-    const nextStatus = quote.status === "draft" ? "sent" : "draft";
+    const nextStatus: QuoteRow["status"] =
+      quote.status === "draft" ? "sent" : "draft";
     const snapshot = rows;
     const nextRows = rows.map((row) =>
       row.id === quote.id ? { ...row, status: nextStatus } : row
     );
 
-    setPendingId(quote.id);
+    setStatusPendingId(quote.id);
     startTransition(() => {
       setRows(nextRows);
     });
@@ -132,7 +134,7 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
       });
     }
 
-    setPendingId(null);
+    setStatusPendingId(null);
   }
 
   return (
@@ -217,9 +219,9 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                         type="button"
                         variant="secondary"
                         onClick={() => handleStatusToggle(quote)}
-                        disabled={pendingId === quote.id}
+                        disabled={pendingId === quote.id || statusPendingId === quote.id}
                       >
-                        {pendingId === quote.id
+                        {statusPendingId === quote.id
                           ? "Updating..."
                           : quote.status === "draft"
                             ? "Mark sent"
@@ -303,9 +305,9 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                   type="button"
                   variant="secondary"
                   onClick={() => handleStatusToggle(quote)}
-                  disabled={pendingId === quote.id}
+                  disabled={pendingId === quote.id || statusPendingId === quote.id}
                 >
-                  {pendingId === quote.id
+                  {statusPendingId === quote.id
                     ? "Updating..."
                     : quote.status === "draft"
                       ? "Mark sent"

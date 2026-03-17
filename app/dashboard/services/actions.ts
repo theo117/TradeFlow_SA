@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requireBusiness } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { services } from "@/lib/db/schema";
 import { serviceSchema } from "@/lib/validations";
 
 export async function createService(formData: FormData) {
@@ -16,23 +18,21 @@ export async function createService(formData: FormData) {
       price: formData.get("price")
     });
 
-    const supabase = await createClient();
-    const { error } = await supabase.from("services").insert({
-      business_id: business.id,
+    await db.insert(services).values({
+      businessId: business.id,
       name: payload.name,
       description: payload.description || null,
       price: payload.price
     });
-
-    if (error) {
-      redirect(`/dashboard/services/new?error=${encodeURIComponent(error.message)}`);
-    }
 
     revalidatePath("/dashboard/services");
     redirect("/dashboard/services?success=Service%20created");
   } catch (error) {
     if (error instanceof ZodError) {
       redirect(`/dashboard/services/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
+    }
+    if (error instanceof Error) {
+      redirect(`/dashboard/services/new?error=${encodeURIComponent(error.message)}`);
     }
     throw error;
   }
@@ -47,19 +47,18 @@ export async function updateService(serviceId: string, formData: FormData) {
       price: formData.get("price")
     });
 
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("services")
-      .update({
+    const [updatedService] = await db
+      .update(services)
+      .set({
         name: payload.name,
         description: payload.description || null,
         price: payload.price
       })
-      .eq("business_id", business.id)
-      .eq("id", serviceId);
+      .where(and(eq(services.businessId, business.id), eq(services.id, serviceId)))
+      .returning({ id: services.id });
 
-    if (error) {
-      redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.message)}`);
+    if (!updatedService) {
+      redirect(`/dashboard/services/${serviceId}/edit?error=Service%20not%20found`);
     }
 
     revalidatePath("/dashboard/services");
@@ -68,6 +67,9 @@ export async function updateService(serviceId: string, formData: FormData) {
     if (error instanceof ZodError) {
       redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
+    if (error instanceof Error) {
+      redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.message)}`);
+    }
     throw error;
   }
 }
@@ -75,23 +77,30 @@ export async function updateService(serviceId: string, formData: FormData) {
 export async function deleteService(formData: FormData) {
   const business = await requireBusiness();
   const serviceId = String(formData.get("serviceId"));
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("services")
-    .delete()
-    .eq("business_id", business.id)
-    .eq("id", serviceId);
+  try {
+    const [deletedService] = await db
+      .delete(services)
+      .where(and(eq(services.businessId, business.id), eq(services.id, serviceId)))
+      .returning({ id: services.id });
 
-  revalidatePath("/dashboard/services");
-  if (error) {
+    revalidatePath("/dashboard/services");
+
+    if (!deletedService) {
+      return {
+        error: true,
+        message: "Service not found"
+      };
+    }
+
+    return {
+      error: false,
+      message: "Service deleted"
+    };
+  } catch (error) {
     return {
       error: true,
-      message: error.message
+      message: error instanceof Error ? error.message : "Unable to delete service"
     };
   }
-  return {
-    error: false,
-    message: "Service deleted"
-  };
 }

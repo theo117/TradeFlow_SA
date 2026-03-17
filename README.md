@@ -7,216 +7,133 @@ TradeFlow SA is a SaaS foundation for small South African service businesses to 
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
-- Supabase Auth
+- Auth.js credentials auth
 - PostgreSQL
+- Drizzle ORM
 
-## Folder structure
+## Setup
 
-```text
-.
-|-- app
-|   |-- (auth)
-|   |   |-- actions.ts
-|   |   |-- login/page.tsx
-|   |   `-- register/page.tsx
-|   |-- dashboard
-|   |   |-- customers
-|   |   |   |-- [id]/edit/page.tsx
-|   |   |   |-- actions.ts
-|   |   |   |-- new/page.tsx
-|   |   |   `-- page.tsx
-|   |   |-- invoices
-|   |   |   |-- [id]/page.tsx
-|   |   |   |-- actions.ts
-|   |   |   `-- page.tsx
-|   |   |-- quotes
-|   |   |   |-- [id]/page.tsx
-|   |   |   |-- actions.ts
-|   |   |   |-- new/page.tsx
-|   |   |   `-- page.tsx
-|   |   |-- services
-|   |   |   |-- [id]/edit/page.tsx
-|   |   |   |-- actions.ts
-|   |   |   |-- new/page.tsx
-|   |   |   `-- page.tsx
-|   |   |-- layout.tsx
-|   |   `-- page.tsx
-|   |-- invoice
-|   |   `-- [id]/page.tsx
-|   |-- api
-|   |   `-- invoices/[id]/pdf/route.ts
-|   |-- globals.css
-|   |-- layout.tsx
-|   |-- not-found.tsx
-|   `-- page.tsx
-|-- components
-|   |-- auth
-|   |-- dashboard
-|   |-- forms
-|   |-- quotes
-|   `-- ui
-|-- hooks
-|-- lib
-|   |-- supabase
-|   |-- auth.ts
-|   |-- queries.ts
-|   |-- types.ts
-|   |-- utils.ts
-|   `-- validations.ts
-|-- supabase/schema.sql
-|-- middleware.ts
-`-- .env.example
-```
-
-## Database schema
-
-Run [schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql) in the Supabase SQL editor.
-
-Core tables:
-
-- `businesses`: one business per auth user in the MVP.
-- `customers`: belongs to a business.
-- `services`: belongs to a business.
-- `quotes`: belongs to a business and customer.
-- `quote_items`: belongs to a quote and service.
-- `invoices`: belongs to a business and customer, optionally linked to a quote.
-- `invoice_items`: belongs to an invoice and stores the final billed line items.
-
-## Supabase setup
-
-1. Create a Supabase project.
-2. In Supabase Authentication, enable Email auth.
-3. For the simplest MVP onboarding flow, disable mandatory email confirmation while testing, or adjust the register flow to handle pending verification.
-4. Run the SQL in [schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
-5. Copy `.env.example` to `.env.local`.
-6. Fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+1. Copy `.env.example` to `.env.local`.
+2. Fill in:
+   - `DATABASE_URL`
+   - `DATABASE_URL_UNPOOLED`
    - `NEXT_PUBLIC_APP_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-7. Install dependencies:
+   - `AUTH_SECRET`
+3. Create a PostgreSQL database.
+4. Run the SQL in [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
+5. Install dependencies:
 
 ```bash
 npm install
 ```
 
-8. Start the app:
+6. Start the app:
 
 ```bash
 npm run dev
 ```
 
-9. Open `http://localhost:3000`.
+7. Open `http://localhost:3000`.
+
+## Local Postgres
+
+The repo now includes [docker-compose.yml](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/docker-compose.yml) for local PostgreSQL.
+
+If you install Docker Desktop, you can start the database with:
+
+```bash
+docker compose up -d
+```
+
+Then apply the schema:
+
+```bash
+psql postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa -f supabase/schema.sql
+```
+
+The default local app config in [`.env.local`](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/.env.local) already points at that database.
+
+## Database workflow
+
+- The app uses plain PostgreSQL.
+- The canonical schema file is [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
+- Drizzle schema lives in [lib/db/schema.ts](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/lib/db/schema.ts).
+- For Neon:
+  - `DATABASE_URL` should be the pooled connection string used by the live app.
+  - `DATABASE_URL_UNPOOLED` should be the direct connection string used for schema tools.
+- Optional Drizzle commands:
+
+```bash
+npm run db:generate
+npm run db:push
+```
+
+## Neon Production
+
+Neon is the recommended production database target for this repo.
+
+1. Create a Neon project and database.
+2. Copy the pooled Neon connection string into `DATABASE_URL`.
+3. Copy the direct Neon connection string into `DATABASE_URL_UNPOOLED`.
+4. Apply the schema:
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -f supabase/schema.sql
+```
+
+5. Set the same env vars in your hosting platform.
+
+Neon recommends pooled connections for app traffic and direct connections for tooling such as migrations.
+Sources:
+- https://neon.com/docs/get-started-with-neon/connect-neon
+- https://neon.com/docs/guides/vercel/
+
+## Vercel Deployment
+
+This app is ready for standard Next.js deployment on Vercel.
+
+1. Push this repo to GitHub, GitLab, or Bitbucket.
+2. Import the repo into Vercel.
+3. In Vercel Project Settings, add these environment variables for `Production`:
+   - `DATABASE_URL`
+   - `DATABASE_URL_UNPOOLED`
+   - `AUTH_SECRET`
+   - `NEXT_PUBLIC_APP_URL`
+4. Set `NEXT_PUBLIC_APP_URL` to your production domain, for example `https://your-app.vercel.app`.
+5. Deploy.
+
+Recommended preview setup:
+
+- Add preview values for:
+  - `DATABASE_URL`
+  - `DATABASE_URL_UNPOOLED`
+  - `AUTH_SECRET`
+- You can omit `NEXT_PUBLIC_APP_URL` in previews because the app falls back to `VERCEL_URL`.
+
+Useful Vercel workflow commands:
+
+```bash
+vercel
+vercel --prod
+vercel env pull .env.local
+```
+
+Vercel notes that environment variables apply to the next deployment after you add or change them, and `vercel env pull` can sync development values locally.
+Sources:
+- https://vercel.com/docs/environment-variables
+- https://vercel.com/docs/cli/env
+- https://vercel.com/docs/frameworks/nextjs
 
 ## Auth flow
 
-- Register creates a Supabase user, then inserts a `businesses` row.
-- Login uses Supabase password auth.
+- Register creates a local `users` record, hashes the password, then creates a `businesses` row.
+- Login uses Auth.js credentials auth.
 - Middleware protects `/dashboard/**`.
-- Logout signs out and redirects to `/login`.
-
-## Example database queries
-
-Dashboard counts:
-
-```ts
-const [{ count: customerCount }, { count: quoteCount }] = await Promise.all([
-  supabase
-    .from("customers")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", business.id),
-  supabase
-    .from("quotes")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", business.id)
-]);
-```
-
-Fetch quotes with customer data:
-
-```ts
-const { data: quotes } = await supabase
-  .from("quotes")
-  .select("id, total, status, created_at, customer:customers(id, name, email, phone)")
-  .eq("business_id", business.id)
-  .order("created_at", { ascending: false });
-```
-
-Create a quote and quote items:
-
-```ts
-const { data: quote } = await supabase
-  .from("quotes")
-  .insert({
-    business_id: business.id,
-    customer_id: payload.customerId,
-    status: payload.status,
-    total
-  })
-  .select("id")
-  .single();
-
-await supabase.from("quote_items").insert(
-  payload.items.map((item) => ({
-    quote_id: quote.id,
-    service_id: item.service_id,
-    quantity: item.quantity,
-    price: item.price,
-    subtotal: item.subtotal
-  }))
-);
-```
-
-Convert a quote into an invoice:
-
-```ts
-const { data: invoice } = await supabase
-  .from("invoices")
-  .insert({
-    business_id: business.id,
-    customer_id: quote.customer_id,
-    quote_id: quote.id,
-    total: quote.total,
-    due_date: payload.dueDate
-  })
-  .select("id, invoice_number")
-  .single();
-
-await supabase.from("invoice_items").insert(
-  quote.items.map((item) => ({
-    invoice_id: invoice.id,
-    service_id: item.service_id,
-    description: item.service?.name ?? "Service",
-    quantity: item.quantity,
-    price: item.price,
-    subtotal: item.subtotal
-  }))
-);
-```
-
-Fetch invoices with customer data:
-
-```ts
-const { data: invoices } = await supabase
-  .from("invoices")
-  .select(
-    "id, invoice_number, status, total, due_date, created_at, customer:customers(id, name, email, phone)"
-  )
-  .eq("business_id", business.id)
-  .order("created_at", { ascending: false });
-```
-
-Sync overdue invoices:
-
-```ts
-await supabase.rpc("sync_overdue_invoices", {
-  target_business_id: business.id
-});
-```
+- Logout clears the session and redirects to `/login`.
 
 ## Features included
 
-- Supabase authentication and protected dashboard routes
+- Credentials authentication and protected dashboard routes
 - Dashboard metrics and recent quotes
 - Customer CRUD
 - Service CRUD
@@ -225,11 +142,10 @@ await supabase.rpc("sync_overdue_invoices", {
 - Public invoice route and PDF invoice downloads
 - WhatsApp share links for invoices
 - Overdue invoice automation
-- Responsive sidebar-style dashboard layout
+- Responsive dashboard layout
 
 ## Notes
 
 - This MVP assumes one business per signed-in user.
-- Edit and delete are implemented for customers and services.
-- Quotes support create, list, and view.
-- Public invoice pages and PDF downloads use `SUPABASE_SERVICE_ROLE_KEY` server-side.
+- Access control is enforced in application code instead of database RLS.
+- Public invoice pages and PDF downloads are still available without signing in.

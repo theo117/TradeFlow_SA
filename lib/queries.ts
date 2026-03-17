@@ -1,205 +1,500 @@
 import { cache } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { requireBusiness } from "@/lib/auth";
+import { db } from "@/lib/db";
+import {
+  businesses,
+  customers,
+  invoiceItems,
+  invoices,
+  quoteItems,
+  quotes,
+  services
+} from "@/lib/db/schema";
 import { syncOverdueInvoices, syncOverdueInvoicesAsAdmin } from "@/lib/invoices";
-import { createAdminClient } from "@/lib/supabase/admin";
 
-const invoiceListSelect =
-  "id, business_id, customer_id, quote_id, invoice_number, status, total, due_date, created_at, customer:customers(id, name, email, phone, address)";
-const invoiceDetailSelect =
-  "id, business_id, customer_id, quote_id, invoice_number, status, total, due_date, created_at, business:businesses(id, name, email, phone, address, logo_url, payment_instructions, created_at, owner_id), customer:customers(id, name, email, phone, address, business_id, created_at), items:invoice_items(id, invoice_id, service_id, description, quantity, price, subtotal, service:services(id, name, description))";
+function mapBusiness(row: {
+  id: string;
+  ownerId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  logoUrl: string | null;
+  paymentInstructions: string | null;
+  createdAt: string;
+}) {
+  return {
+    id: row.id,
+    owner_id: row.ownerId,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    logo_url: row.logoUrl,
+    payment_instructions: row.paymentInstructions,
+    created_at: row.createdAt
+  };
+}
+
+function mapCustomer(row: {
+  id: string;
+  businessId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  createdAt: string;
+}) {
+  return {
+    id: row.id,
+    business_id: row.businessId,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    created_at: row.createdAt
+  };
+}
+
+function mapService(row: {
+  id: string;
+  businessId: string;
+  name: string;
+  description: string | null;
+  price: number;
+}) {
+  return {
+    id: row.id,
+    business_id: row.businessId,
+    name: row.name,
+    description: row.description,
+    price: row.price
+  };
+}
 
 export const getDashboardMetrics = cache(async () => {
-  const supabase = await createClient();
   const business = await requireBusiness();
   await syncOverdueInvoices(business.id);
 
   const [
-    { count: customerCount },
-    { count: quoteCount },
-    { count: unpaidInvoiceCount },
-    { count: overdueInvoiceCount },
-    { data: paidInvoices },
-    { data: recentQuotes }
+    [{ customerCount }],
+    [{ quoteCount }],
+    [{ unpaidInvoiceCount }],
+    [{ overdueInvoiceCount }],
+    paidInvoices,
+    recentQuoteRows
   ] = await Promise.all([
-      supabase
-        .from("customers")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", business.id),
-      supabase
-        .from("quotes")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", business.id),
-      supabase
-        .from("invoices")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", business.id)
-        .in("status", ["draft", "sent", "overdue"]),
-      supabase
-        .from("invoices")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", business.id)
-        .eq("status", "overdue"),
-      supabase
-        .from("invoices")
-        .select("total")
-        .eq("business_id", business.id)
-        .eq("status", "paid"),
-      supabase
-        .from("quotes")
-        .select("id, total, status, created_at, customer:customers(id, name)")
-        .eq("business_id", business.id)
-        .order("created_at", { ascending: false })
-        .limit(5)
-    ]);
+    db
+      .select({ customerCount: count() })
+      .from(customers)
+      .where(eq(customers.businessId, business.id)),
+    db
+      .select({ quoteCount: count() })
+      .from(quotes)
+      .where(eq(quotes.businessId, business.id)),
+    db
+      .select({ unpaidInvoiceCount: count() })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.businessId, business.id),
+          inArray(invoices.status, ["draft", "sent", "overdue"])
+        )
+      ),
+    db
+      .select({ overdueInvoiceCount: count() })
+      .from(invoices)
+      .where(
+        and(eq(invoices.businessId, business.id), eq(invoices.status, "overdue"))
+      ),
+    db
+      .select({ total: invoices.total })
+      .from(invoices)
+      .where(and(eq(invoices.businessId, business.id), eq(invoices.status, "paid"))),
+    db
+      .select({
+        id: quotes.id,
+        businessId: quotes.businessId,
+        customerId: quotes.customerId,
+        status: quotes.status,
+        total: quotes.total,
+        createdAt: quotes.createdAt,
+        customer: {
+          id: customers.id,
+          name: customers.name
+        }
+      })
+      .from(quotes)
+      .leftJoin(customers, eq(quotes.customerId, customers.id))
+      .where(eq(quotes.businessId, business.id))
+      .orderBy(desc(quotes.createdAt))
+      .limit(5)
+  ]);
 
   return {
-    customerCount: customerCount ?? 0,
-    quoteCount: quoteCount ?? 0,
-    unpaidInvoiceCount: unpaidInvoiceCount ?? 0,
-    overdueInvoiceCount: overdueInvoiceCount ?? 0,
+    customerCount,
+    quoteCount,
+    unpaidInvoiceCount,
+    overdueInvoiceCount,
     totalRevenue:
-      paidInvoices?.reduce((sum, invoice) => sum + Number(invoice.total), 0) ?? 0,
-    recentQuotes: recentQuotes ?? []
+      paidInvoices.reduce((sum, invoice) => sum + Number(invoice.total), 0) ?? 0,
+    recentQuotes: recentQuoteRows.map((row) => ({
+      id: row.id,
+      business_id: row.businessId,
+      customer_id: row.customerId,
+      status: row.status,
+      total: row.total,
+      created_at: row.createdAt,
+      customer: row.customer?.id
+        ? {
+            id: row.customer.id,
+            name: row.customer.name ?? "Unknown"
+          }
+        : null
+    }))
   };
 });
 
 export const getCustomers = cache(async () => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("business_id", business.id)
-    .order("created_at", { ascending: false });
+  const rows = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.businessId, business.id))
+    .orderBy(desc(customers.createdAt));
 
-  return data ?? [];
+  return rows.map((row) => mapCustomer(row));
 });
 
 export const getCustomerById = cache(async (id: string) => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("business_id", business.id)
-    .eq("id", id)
-    .single();
+  const [row] = await db
+    .select()
+    .from(customers)
+    .where(and(eq(customers.businessId, business.id), eq(customers.id, id)))
+    .limit(1);
 
-  return data;
+  return row ? mapCustomer(row) : null;
 });
 
 export const getServices = cache(async () => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("services")
-    .select("*")
-    .eq("business_id", business.id)
-    .order("name");
+  const rows = await db
+    .select()
+    .from(services)
+    .where(eq(services.businessId, business.id))
+    .orderBy(services.name);
 
-  return data ?? [];
+  return rows.map((row) => mapService(row));
 });
 
 export const getServiceById = cache(async (id: string) => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("services")
-    .select("*")
-    .eq("business_id", business.id)
-    .eq("id", id)
-    .single();
+  const [row] = await db
+    .select()
+    .from(services)
+    .where(and(eq(services.businessId, business.id), eq(services.id, id)))
+    .limit(1);
 
-  return data;
+  return row ? mapService(row) : null;
 });
 
 export const getQuotes = cache(async () => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("quotes")
-    .select("id, total, status, created_at, customer:customers(id, name, email, phone)")
-    .eq("business_id", business.id)
-    .order("created_at", { ascending: false });
+  const rows = await db
+    .select({
+      id: quotes.id,
+      businessId: quotes.businessId,
+      customerId: quotes.customerId,
+      status: quotes.status,
+      total: quotes.total,
+      createdAt: quotes.createdAt,
+      customer: {
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address
+      }
+    })
+    .from(quotes)
+    .leftJoin(customers, eq(quotes.customerId, customers.id))
+    .where(eq(quotes.businessId, business.id))
+    .orderBy(desc(quotes.createdAt));
 
-  return data ?? [];
+  return rows.map((row) => ({
+    id: row.id,
+    business_id: row.businessId,
+    customer_id: row.customerId,
+    status: row.status,
+    total: row.total,
+    created_at: row.createdAt,
+    customer: row.customer?.id
+      ? {
+          id: row.customer.id,
+          name: row.customer.name ?? "Unknown",
+          email: row.customer.email,
+          phone: row.customer.phone,
+          address: row.customer.address
+        }
+      : null
+  }));
 });
 
 export const getQuoteById = cache(async (id: string) => {
-  const supabase = await createClient();
   const business = await requireBusiness();
 
-  const { data } = await supabase
-    .from("quotes")
-    .select(
-      "id, business_id, customer_id, status, total, created_at, customer:customers(id, name, email, phone, address), items:quote_items(id, service_id, quantity, price, subtotal, service:services(id, name, description))"
-    )
-    .eq("business_id", business.id)
-    .eq("id", id)
-    .single();
+  const [quoteRow] = await db
+    .select({
+      id: quotes.id,
+      businessId: quotes.businessId,
+      customerId: quotes.customerId,
+      status: quotes.status,
+      total: quotes.total,
+      createdAt: quotes.createdAt,
+      customer: {
+        id: customers.id,
+        businessId: customers.businessId,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
+        createdAt: customers.createdAt
+      }
+    })
+    .from(quotes)
+    .leftJoin(customers, eq(quotes.customerId, customers.id))
+    .where(and(eq(quotes.businessId, business.id), eq(quotes.id, id)))
+    .limit(1);
 
-  return data;
+  if (!quoteRow) {
+    return null;
+  }
+
+  const itemRows = await db
+    .select({
+      id: quoteItems.id,
+      quoteId: quoteItems.quoteId,
+      serviceId: quoteItems.serviceId,
+      quantity: quoteItems.quantity,
+      price: quoteItems.price,
+      subtotal: quoteItems.subtotal,
+      service: {
+        id: services.id,
+        businessId: services.businessId,
+        name: services.name,
+        description: services.description,
+        price: services.price
+      }
+    })
+    .from(quoteItems)
+    .leftJoin(services, eq(quoteItems.serviceId, services.id))
+    .where(eq(quoteItems.quoteId, id));
+
+  return {
+    id: quoteRow.id,
+    business_id: quoteRow.businessId,
+    customer_id: quoteRow.customerId,
+    status: quoteRow.status,
+    total: quoteRow.total,
+    created_at: quoteRow.createdAt,
+    customer: quoteRow.customer?.id ? mapCustomer(quoteRow.customer) : null,
+    items: itemRows.map((item) => ({
+      id: item.id,
+      quote_id: item.quoteId,
+      service_id: item.serviceId,
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal,
+      service: item.service?.id
+        ? {
+            id: item.service.id,
+            name: item.service.name ?? "Unknown service",
+            description: item.service.description
+          }
+        : null
+    }))
+  };
 });
 
 export const getInvoiceByQuoteId = cache(async (quoteId: string) => {
-  const supabase = await createClient();
   const business = await requireBusiness();
   await syncOverdueInvoices(business.id);
 
-  const { data } = await supabase
-    .from("invoices")
-    .select("id, invoice_number, status")
-    .eq("business_id", business.id)
-    .eq("quote_id", quoteId)
-    .maybeSingle();
+  const [row] = await db
+    .select({
+      id: invoices.id,
+      invoice_number: invoices.invoiceNumber,
+      status: invoices.status
+    })
+    .from(invoices)
+    .where(
+      and(eq(invoices.businessId, business.id), eq(invoices.quoteId, quoteId))
+    )
+    .limit(1);
 
-  return data;
+  return row ?? null;
 });
 
 export const getInvoices = cache(async () => {
-  const supabase = await createClient();
   const business = await requireBusiness();
   await syncOverdueInvoices(business.id);
 
-  const { data } = await supabase
-    .from("invoices")
-    .select(invoiceListSelect)
-    .eq("business_id", business.id)
-    .order("created_at", { ascending: false });
+  const rows = await db
+    .select({
+      id: invoices.id,
+      businessId: invoices.businessId,
+      customerId: invoices.customerId,
+      quoteId: invoices.quoteId,
+      invoiceNumber: invoices.invoiceNumber,
+      status: invoices.status,
+      total: invoices.total,
+      dueDate: invoices.dueDate,
+      createdAt: invoices.createdAt,
+      customer: {
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address
+      }
+    })
+    .from(invoices)
+    .leftJoin(customers, eq(invoices.customerId, customers.id))
+    .where(eq(invoices.businessId, business.id))
+    .orderBy(desc(invoices.createdAt));
 
-  return data ?? [];
+  return rows.map((row) => ({
+    id: row.id,
+    business_id: row.businessId,
+    customer_id: row.customerId,
+    quote_id: row.quoteId,
+    invoice_number: row.invoiceNumber,
+    status: row.status,
+    total: row.total,
+    due_date: row.dueDate,
+    created_at: row.createdAt,
+    customer: row.customer?.id
+      ? {
+          id: row.customer.id,
+          name: row.customer.name ?? "Unknown",
+          email: row.customer.email,
+          phone: row.customer.phone,
+          address: row.customer.address
+        }
+      : null
+  }));
 });
 
+async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType<typeof eq>) {
+  const [invoiceRow] = await db
+    .select({
+      id: invoices.id,
+      businessId: invoices.businessId,
+      customerId: invoices.customerId,
+      quoteId: invoices.quoteId,
+      invoiceNumber: invoices.invoiceNumber,
+      status: invoices.status,
+      total: invoices.total,
+      dueDate: invoices.dueDate,
+      createdAt: invoices.createdAt,
+      business: {
+        id: businesses.id,
+        ownerId: businesses.ownerId,
+        name: businesses.name,
+        email: businesses.email,
+        phone: businesses.phone,
+        address: businesses.address,
+        logoUrl: businesses.logoUrl,
+        paymentInstructions: businesses.paymentInstructions,
+        createdAt: businesses.createdAt
+      },
+      customer: {
+        id: customers.id,
+        businessId: customers.businessId,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
+        createdAt: customers.createdAt
+      }
+    })
+    .from(invoices)
+    .innerJoin(businesses, eq(invoices.businessId, businesses.id))
+    .innerJoin(customers, eq(invoices.customerId, customers.id))
+    .where(whereClause)
+    .limit(1);
+
+  if (!invoiceRow) {
+    return null;
+  }
+
+  const itemRows = await db
+    .select({
+      id: invoiceItems.id,
+      invoiceId: invoiceItems.invoiceId,
+      serviceId: invoiceItems.serviceId,
+      description: invoiceItems.description,
+      quantity: invoiceItems.quantity,
+      price: invoiceItems.price,
+      subtotal: invoiceItems.subtotal,
+      service: {
+        id: services.id,
+        businessId: services.businessId,
+        name: services.name,
+        description: services.description,
+        price: services.price
+      }
+    })
+    .from(invoiceItems)
+    .leftJoin(services, eq(invoiceItems.serviceId, services.id))
+    .where(eq(invoiceItems.invoiceId, invoiceRow.id));
+
+  return {
+    id: invoiceRow.id,
+    business_id: invoiceRow.businessId,
+    customer_id: invoiceRow.customerId,
+    quote_id: invoiceRow.quoteId,
+    invoice_number: invoiceRow.invoiceNumber,
+    status: invoiceRow.status,
+    total: invoiceRow.total,
+    due_date: invoiceRow.dueDate,
+    created_at: invoiceRow.createdAt,
+    business: mapBusiness(invoiceRow.business),
+    customer: mapCustomer(invoiceRow.customer),
+    items: itemRows.map((item) => ({
+      id: item.id,
+      invoice_id: item.invoiceId,
+      service_id: item.serviceId,
+      description: item.description,
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal,
+      service: item.service?.id
+        ? {
+            id: item.service.id,
+            name: item.service.name ?? "Unknown service",
+            description: item.service.description
+          }
+        : null
+    }))
+  };
+}
+
 export const getInvoiceById = cache(async (id: string) => {
-  const supabase = await createClient();
   const business = await requireBusiness();
   await syncOverdueInvoices(business.id);
 
-  const { data } = await supabase
-    .from("invoices")
-    .select(invoiceDetailSelect)
-    .eq("business_id", business.id)
-    .eq("id", id)
-    .single();
-
-  return data;
+  return getInvoiceDetail(and(eq(invoices.businessId, business.id), eq(invoices.id, id)));
 });
 
 export const getPublicInvoiceById = cache(async (id: string) => {
-  const supabase = createAdminClient();
   await syncOverdueInvoicesAsAdmin();
-
-  const { data } = await supabase
-    .from("invoices")
-    .select(invoiceDetailSelect)
-    .eq("id", id)
-    .single();
-
-  return data;
+  return getInvoiceDetail(eq(invoices.id, id));
 });

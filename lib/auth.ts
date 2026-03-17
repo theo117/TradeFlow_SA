@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+import { businesses } from "@/lib/db/schema";
 
 export async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const session = await auth();
+  const user = session?.user;
 
-  if (!user) {
+  if (!user?.id) {
     redirect("/login");
   }
 
@@ -16,16 +17,25 @@ export async function requireUser() {
 
 export async function requireBusiness() {
   const user = await requireUser();
-  const supabase = await createClient();
-  const { data: business } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("owner_id", user.id)
-    .single();
+  const [business] = await db
+    .select()
+    .from(businesses)
+    .where(eq(businesses.ownerId, user.id))
+    .limit(1);
 
   if (!business) {
     redirect("/register");
   }
 
-  return business;
+  return {
+    id: business.id,
+    owner_id: business.ownerId,
+    name: business.name,
+    email: business.email,
+    phone: business.phone,
+    address: business.address,
+    logo_url: business.logoUrl,
+    payment_instructions: business.paymentInstructions,
+    created_at: business.createdAt
+  };
 }

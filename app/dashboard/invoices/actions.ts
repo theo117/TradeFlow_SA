@@ -2,10 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requireBusiness } from "@/lib/auth";
+import { db } from "@/lib/db";
+import {
+  invoiceItems,
+  invoices,
+  quoteItems,
+  quotes,
+  services
+} from "@/lib/db/schema";
 import { getDefaultInvoiceDueDate } from "@/lib/invoices";
-import { createClient } from "@/lib/supabase/server";
 import { convertQuoteToInvoiceSchema, invoiceStatusSchema } from "@/lib/validations";
 
 export async function convertQuoteToInvoice(formData: FormData) {
@@ -20,14 +28,17 @@ export async function convertQuoteToInvoice(formData: FormData) {
     });
 
     const business = await requireBusiness();
-    const supabase = await createClient();
 
-    const { data: existingInvoice } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("business_id", business.id)
-      .eq("quote_id", payload.quoteId)
-      .maybeSingle();
+    const [existingInvoice] = await db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.businessId, business.id),
+          eq(invoices.quoteId, payload.quoteId)
+        )
+      )
+      .limit(1);
 
     if (existingInvoice) {
       redirect(
@@ -35,65 +46,63 @@ export async function convertQuoteToInvoice(formData: FormData) {
       );
     }
 
-    const { data: quote, error: quoteError } = await supabase
-      .from("quotes")
-      .select(
-        "id, customer_id, total, items:quote_items(service_id, quantity, price, subtotal, service:services(name, description))"
-      )
-      .eq("business_id", business.id)
-      .eq("id", payload.quoteId)
-      .single();
-
-    if (quoteError || !quote) {
-      redirect(
-        `${redirectTo}?error=${encodeURIComponent(
-          quoteError?.message ?? "Quote not found"
-        )}`
-      );
-    }
-
-    const { data: invoice, error: invoiceError } = await supabase
-      .from("invoices")
-      .insert({
-        business_id: business.id,
-        customer_id: quote.customer_id,
-        quote_id: quote.id,
-        status: "draft",
-        total: quote.total,
-        due_date: payload.dueDate
+    const [quote] = await db
+      .select({
+        id: quotes.id,
+        customerId: quotes.customerId,
+        total: quotes.total
       })
-      .select("id")
-      .single();
+      .from(quotes)
+      .where(and(eq(quotes.businessId, business.id), eq(quotes.id, payload.quoteId)))
+      .limit(1);
 
-    if (invoiceError || !invoice) {
+    if (!quote) {
       redirect(
-        `${redirectTo}?error=${encodeURIComponent(
-          invoiceError?.message ?? "Unable to convert quote"
-        )}`
+        `${redirectTo}?error=${encodeURIComponent("Quote not found")}`
       );
     }
 
-    const { error: itemsError } = await supabase.from("invoice_items").insert(
-      (quote.items ?? []).map((item) => ({
-        invoice_id: invoice.id,
-        service_id: item.service_id,
-        description: item.service?.name ?? item.service?.description ?? "Service",
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.subtotal
-      }))
-    );
+    const items = await db
+      .select({
+        serviceId: quoteItems.serviceId,
+        quantity: quoteItems.quantity,
+        price: quoteItems.price,
+        subtotal: quoteItems.subtotal,
+        service: {
+          name: services.name,
+          description: services.description
+        }
+      })
+      .from(quoteItems)
+      .leftJoin(services, eq(quoteItems.serviceId, services.id))
+      .where(eq(quoteItems.quoteId, quote.id));
 
-    if (itemsError) {
-      await supabase
-        .from("invoices")
-        .delete()
-        .eq("business_id", business.id)
-        .eq("id", invoice.id);
-      redirect(
-        `${redirectTo}?error=${encodeURIComponent(itemsError.message)}`
+    const invoice = await db.transaction(async (tx) => {
+      const [createdInvoice] = await tx
+        .insert(invoices)
+        .values({
+          businessId: business.id,
+          customerId: quote.customerId,
+          quoteId: quote.id,
+          status: "draft",
+          total: quote.total,
+          dueDate: payload.dueDate
+        })
+        .returning({ id: invoices.id });
+
+      await tx.insert(invoiceItems).values(
+        items.map((item) => ({
+          invoiceId: createdInvoice.id,
+          serviceId: item.serviceId,
+          description: item.service?.name ?? item.service?.description ?? "Service",
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal
+        }))
       );
-    }
+
+      return createdInvoice;
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/quotes");
@@ -108,6 +117,9 @@ export async function convertQuoteToInvoice(formData: FormData) {
         )}`
       );
     }
+    if (error instanceof Error) {
+      redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+    }
 
     throw error;
   }
@@ -118,31 +130,37 @@ export async function updateInvoiceStatus(
   nextStatus: "draft" | "sent" | "paid" | "overdue"
 ) {
   const business = await requireBusiness();
-  const supabase = await createClient();
   const status = invoiceStatusSchema.parse(nextStatus);
 
-  const { error } = await supabase
-    .from("invoices")
-    .update({ status })
-    .eq("business_id", business.id)
-    .eq("id", invoiceId);
+  try {
+    const [updatedInvoice] = await db
+      .update(invoices)
+      .set({ status })
+      .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+      .returning({ id: invoices.id });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/invoices");
-  revalidatePath(`/dashboard/invoices/${invoiceId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/invoices");
+    revalidatePath(`/dashboard/invoices/${invoiceId}`);
 
-  if (error) {
+    if (!updatedInvoice) {
+      return {
+        error: true,
+        message: "Invoice not found"
+      };
+    }
+
+    return {
+      error: false,
+      message:
+        status === "paid"
+          ? "Invoice marked as paid"
+          : `Invoice updated to ${status}`
+    };
+  } catch (error) {
     return {
       error: true,
-      message: error.message
+      message: error instanceof Error ? error.message : "Unable to update invoice"
     };
   }
-
-  return {
-    error: false,
-    message:
-      status === "paid"
-        ? "Invoice marked as paid"
-        : `Invoice updated to ${status}`
-  };
 }

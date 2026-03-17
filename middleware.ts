@@ -1,38 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createMiddlewareClient } from "@/lib/supabase/middleware";
+import { getToken } from "next-auth/jwt";
 
 const PROTECTED_PREFIX = "/dashboard";
 const AUTH_ROUTES = ["/login", "/register"];
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers
-    }
-  });
-
-  const supabase = createMiddlewareClient(request, response);
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
   const { pathname } = request.nextUrl;
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET
+  });
+  const isAuthenticated = Boolean(token);
 
-  if (pathname.startsWith(PROTECTED_PREFIX) && !session) {
+  if (pathname.startsWith(PROTECTED_PREFIX) && !isAuthenticated) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (AUTH_ROUTES.includes(pathname) && session) {
+  if (AUTH_ROUTES.includes(pathname) && isAuthenticated) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
