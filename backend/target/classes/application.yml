@@ -1,0 +1,32 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: tradeflow-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/tradeflow_sa}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+tradeflow:
+  jwt:
+    secret: ${JWT_SECRET:replace-this-with-at-least-32-characters}
+    issuer: ${JWT_ISSUER:tradeflow-api}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}
+  payfast:
+    passphrase: ${PAYFAST_PASSPHRASE:}
+    validate-url: ${PAYFAST_VALIDATE_URL:https://www.payfast.co.za/eng/query/validate}
+    starter-amount: ${PAYFAST_PLAN_STARTER_AMOUNT:0.00}
+    pro-amount: ${PAYFAST_PLAN_PRO_AMOUNT:0.00}
+  whatsapp:
+    verify-token: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:}
+    app-secret: ${WHATSAPP_APP_SECRET:}

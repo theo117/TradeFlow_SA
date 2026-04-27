@@ -4,6 +4,12 @@ TradeFlow SA helps small South African service businesses manage customers, serv
 
 ## Tech stack
 
+- Spring Boot REST API backend in [backend](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/backend)
+- JWT authentication for API clients
+- Webhooks for Payfast and WhatsApp Cloud API
+- External API calls for payment verification
+- Background jobs for subscription/payment state checks
+- Clean controller -> service -> repository backend structure
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
@@ -12,6 +18,8 @@ TradeFlow SA helps small South African service businesses manage customers, serv
 - Drizzle ORM
 
 ## Setup
+
+### Frontend
 
 1. Copy `.env.example` to `.env.local`.
 2. Fill in:
@@ -42,6 +50,44 @@ npm run dev
 ```
 
 7. Open `http://localhost:3000`.
+
+### Spring Boot API
+
+The rebranded backend lives in [backend](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/backend).
+
+Install Maven, then run:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+The API starts on `http://localhost:8080` and uses the existing PostgreSQL schema from [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
+
+Important backend env vars:
+
+- `DATABASE_URL`
+- `DATABASE_USERNAME`
+- `DATABASE_PASSWORD`
+- `JWT_SECRET`
+- `PAYFAST_PASSPHRASE`
+- `PAYFAST_VALIDATE_URL`
+- `PAYFAST_PLAN_STARTER_AMOUNT`
+- `PAYFAST_PLAN_PRO_AMOUNT`
+- `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+- `WHATSAPP_APP_SECRET`
+
+Key API endpoints:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/customers`
+- `POST /api/customers`
+- `PUT /api/customers/{id}`
+- `DELETE /api/customers/{id}`
+- `POST /api/webhooks/payfast`
+- `GET /api/webhooks/whatsapp`
+- `POST /api/webhooks/whatsapp`
 
 ## Local Postgres
 
