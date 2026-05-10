@@ -101,7 +101,7 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
     initialSortDirection: "desc",
     matchesSearch,
     compare,
-    resetDependencies: [statusFilter]
+    resetKey: statusFilter
   });
   const { target, setTarget, pendingId, toast, setToast, confirmDelete } =
     useOptimisticDelete({

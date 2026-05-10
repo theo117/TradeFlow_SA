@@ -1,13 +1,37 @@
 import { drizzle } from "drizzle-orm/postgres-js";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/lib/db/schema";
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa";
+type TradeFlowDatabase = PostgresJsDatabase<typeof schema>;
 
-const client = postgres(databaseUrl, {
-  prepare: false
+let client: postgres.Sql | null = null;
+let database: TradeFlowDatabase | null = null;
+
+function getDatabaseUrl() {
+  return (
+    process.env.DATABASE_URL ??
+    "postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa"
+  );
+}
+
+export function getDb() {
+  if (!client) {
+    client = postgres(getDatabaseUrl(), {
+      prepare: false
+    });
+  }
+
+  if (!database) {
+    database = drizzle(client, { schema });
+  }
+
+  return database;
+}
+
+export const db = new Proxy({} as TradeFlowDatabase, {
+  get(_target, property, receiver) {
+    const value = Reflect.get(getDb(), property, receiver);
+    return typeof value === "function" ? value.bind(getDb()) : value;
+  }
 });
-
-export const db = drizzle(client, { schema });

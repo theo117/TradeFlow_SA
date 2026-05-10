@@ -113,7 +113,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
     initialSortDirection: "asc",
     matchesSearch,
     compare,
-    resetDependencies: [statusFilter]
+    resetKey: statusFilter
   });
 
   async function handleMarkPaid(invoiceId: string) {

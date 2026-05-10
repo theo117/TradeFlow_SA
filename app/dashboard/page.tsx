@@ -18,11 +18,16 @@ export default async function DashboardPage() {
   const {
     customerCount,
     quoteCount,
+    acceptedQuoteCount,
+    totalQuoteValue,
     unpaidInvoiceCount,
     overdueInvoiceCount,
     totalRevenue,
     recentQuotes
   } = await getDashboardMetrics();
+  const quoteAcceptanceRate =
+    quoteCount === 0 ? 0 : Math.round((acceptedQuoteCount / quoteCount) * 100);
+  const averageQuoteValue = quoteCount === 0 ? 0 : totalQuoteValue / quoteCount;
 
   return (
     <div className="space-y-6">
@@ -114,24 +119,13 @@ export default async function DashboardPage() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="text-sm text-slate-500">Quote acceptance</p>
                 <p className="mt-2 text-3xl font-semibold text-ink">
-                  {quoteCount === 0
-                    ? "0%"
-                    : `${Math.round(
-                        (recentQuotes.filter((quote) => quote.status === "accepted").length /
-                          Math.max(recentQuotes.length, 1)) *
-                          100
-                      )}%`}
+                  {quoteAcceptanceRate}%
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="text-sm text-slate-500">Average quote value</p>
                 <p className="mt-2 text-3xl font-semibold text-ink">
-                  {quoteCount === 0
-                    ? currency(0)
-                    : currency(
-                        recentQuotes.reduce((sum, quote) => sum + Number(quote.total), 0) /
-                          Math.max(recentQuotes.length, 1)
-                      )}
+                  {currency(averageQuoteValue)}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">

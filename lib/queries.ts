@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -160,7 +160,7 @@ export const getDashboardMetrics = cache(async () => {
 
   const [
     [{ customerCount }],
-    [{ quoteCount }],
+    [{ quoteCount, acceptedQuoteCount, totalQuoteValue }],
     [{ unpaidInvoiceCount }],
     [{ overdueInvoiceCount }],
     paidInvoices,
@@ -171,7 +171,11 @@ export const getDashboardMetrics = cache(async () => {
       .from(customers)
       .where(eq(customers.businessId, business.id)),
     db
-      .select({ quoteCount: count() })
+      .select({
+        quoteCount: count(),
+        acceptedQuoteCount: sql<number>`count(*) filter (where ${quotes.status} = 'accepted')`,
+        totalQuoteValue: sql<number>`coalesce(sum(${quotes.total}), 0)`
+      })
       .from(quotes)
       .where(eq(quotes.businessId, business.id)),
     db
@@ -216,6 +220,8 @@ export const getDashboardMetrics = cache(async () => {
   return {
     customerCount,
     quoteCount,
+    acceptedQuoteCount: Number(acceptedQuoteCount ?? 0),
+    totalQuoteValue: Number(totalQuoteValue ?? 0),
     unpaidInvoiceCount,
     overdueInvoiceCount,
     totalRevenue:

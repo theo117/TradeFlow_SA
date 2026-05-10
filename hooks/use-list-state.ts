@@ -11,7 +11,7 @@ export function useListState<TItem, TSortKey extends string>({
   initialSortDirection,
   matchesSearch,
   compare,
-  resetDependencies = []
+  resetKey
 }: {
   items: TItem[];
   pageSize: number;
@@ -24,7 +24,7 @@ export function useListState<TItem, TSortKey extends string>({
     sortKey: TSortKey,
     direction: SortDirection
   ) => number;
-  resetDependencies?: readonly unknown[];
+  resetKey?: unknown;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -44,7 +44,7 @@ export function useListState<TItem, TSortKey extends string>({
 
   useEffect(() => {
     setPage(1);
-  }, [deferredSearch, sortKey, sortDirection, ...resetDependencies]);
+  }, [deferredSearch, resetKey, sortDirection, sortKey]);
 
   useEffect(() => {
     if (page > totalPages) {
