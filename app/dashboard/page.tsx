@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Users
 } from "lucide-react";
+import { DashboardActionPlan } from "@/components/dashboard/action-plan";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { RecentQuotesTable } from "@/components/dashboard/recent-quotes-table";
 import { Topbar } from "@/components/dashboard/topbar";
@@ -16,13 +17,19 @@ import { currency } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const {
+    business,
     customerCount,
+    serviceCount,
     quoteCount,
     acceptedQuoteCount,
+    sentQuoteCount,
+    draftQuoteCount,
     totalQuoteValue,
     unpaidInvoiceCount,
     overdueInvoiceCount,
+    outstandingInvoiceValue,
     totalRevenue,
+    priorityInvoices,
     recentQuotes
   } = await getDashboardMetrics();
   const quoteAcceptanceRate =
@@ -64,6 +71,19 @@ export default async function DashboardPage() {
           tone="sky"
         />
       </section>
+
+      <DashboardActionPlan
+        business={business}
+        customerCount={customerCount}
+        serviceCount={serviceCount}
+        quoteCount={quoteCount}
+        sentQuoteCount={sentQuoteCount}
+        draftQuoteCount={draftQuoteCount}
+        unpaidInvoiceCount={unpaidInvoiceCount}
+        overdueInvoiceCount={overdueInvoiceCount}
+        outstandingInvoiceValue={outstandingInvoiceValue}
+        priorityInvoices={priorityInvoices}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
         <RecentQuotesTable quotes={recentQuotes} />

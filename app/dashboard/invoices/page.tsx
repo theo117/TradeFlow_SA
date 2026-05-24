@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { InvoicesTable } from "@/components/dashboard/invoices-table";
 import { ResourceHeader } from "@/components/dashboard/resource-header";
+import { buttonVariants } from "@/components/ui/button";
 import { getInvoices } from "@/lib/queries";
 import { currency } from "@/lib/utils";
 
@@ -26,6 +28,15 @@ export default async function InvoicesPage() {
           }
         ]}
       />
+
+      <div className="flex justify-end">
+        <Link
+          href="/api/export/invoices"
+          className={buttonVariants({ variant: "secondary" })}
+        >
+          Export invoices CSV
+        </Link>
+      </div>
 
       {invoices.length === 0 ? (
         <EmptyState

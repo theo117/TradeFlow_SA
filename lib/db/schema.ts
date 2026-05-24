@@ -25,6 +25,15 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "paid",
   "overdue"
 ]);
+export const recurringFrequencyEnum = pgEnum("recurring_frequency", [
+  "monthly",
+  "quarterly",
+  "annually"
+]);
+export const recurringTemplateStatusEnum = pgEnum("recurring_template_status", [
+  "active",
+  "paused"
+]);
 
 export const users = pgTable(
   "users",
@@ -252,6 +261,46 @@ export const invoiceItems = pgTable(
   },
   (table) => ({
     invoiceIdx: index("invoice_items_invoice_id_idx").on(table.invoiceId)
+  })
+);
+
+export const recurringInvoiceTemplates = pgTable(
+  "recurring_invoice_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    frequency: recurringFrequencyEnum("frequency").notNull(),
+    status: recurringTemplateStatusEnum("status").default("active").notNull(),
+    total: numeric("total", { precision: 12, scale: 2, mode: "number" })
+      .default(0)
+      .notNull(),
+    nextInvoiceDate: date("next_invoice_date", { mode: "string" }).notNull(),
+    paymentTermsDays: integer("payment_terms_days").default(7).notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    businessIdx: index("recurring_invoice_templates_business_id_idx").on(
+      table.businessId
+    ),
+    customerIdx: index("recurring_invoice_templates_customer_id_idx").on(
+      table.customerId
+    ),
+    nextInvoiceDateIdx: index(
+      "recurring_invoice_templates_next_invoice_date_idx"
+    ).on(table.nextInvoiceDate),
+    statusIdx: index("recurring_invoice_templates_status_idx").on(table.status)
   })
 );
 

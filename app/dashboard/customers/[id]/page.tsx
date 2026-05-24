@@ -20,6 +20,15 @@ export default async function CustomerDetailPage({
   }
 
   const { customer, quotes, invoices, activity } = detail;
+  const paidValue = invoices
+    .filter((invoice) => invoice.status === "paid")
+    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
+  const outstandingValue = invoices
+    .filter((invoice) => invoice.status !== "paid")
+    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
+  const overdueValue = invoices
+    .filter((invoice) => invoice.status === "overdue")
+    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
 
   return (
     <div className="space-y-6">
@@ -78,12 +87,24 @@ export default async function CustomerDetailPage({
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Stat label="Paid" value={currency(paidValue)} />
+            <Stat label="Outstanding" value={currency(outstandingValue)} />
+            <Stat label="Overdue" value={currency(overdueValue)} />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <Link href={`/dashboard/customers/${customer.id}/edit`} className={buttonVariants({})}>
               Edit customer
             </Link>
             <Link href="/dashboard/quotes/new" className={buttonVariants({ variant: "secondary" })}>
               Create quote
+            </Link>
+            <Link
+              href={`/api/customers/${customer.id}/statement`}
+              className={buttonVariants({ variant: "secondary" })}
+            >
+              Download statement
             </Link>
           </div>
         </Card>

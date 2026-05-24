@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BriefcaseBusiness,
+  CalendarClock,
   ChevronLeft,
   CreditCard,
   FileText,
@@ -23,6 +24,7 @@ const links = [
   { href: "/dashboard/services", label: "Services", icon: BriefcaseBusiness },
   { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
   { href: "/dashboard/invoices", label: "Invoices", icon: ReceiptText },
+  { href: "/dashboard/recurring", label: "Recurring", icon: CalendarClock },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard }
 ];

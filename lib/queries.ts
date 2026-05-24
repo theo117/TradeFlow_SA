@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -10,6 +10,7 @@ import {
   invoices,
   quoteItems,
   quotes,
+  recurringInvoiceTemplates,
   services
 } from "@/lib/db/schema";
 import { syncOverdueInvoices, syncOverdueInvoicesAsAdmin } from "@/lib/invoices";
@@ -109,6 +110,48 @@ function mapService(row: {
   };
 }
 
+function mapRecurringInvoiceTemplate(row: {
+  id: string;
+  businessId: string;
+  customerId: string;
+  name: string;
+  description: string;
+  frequency: "monthly" | "quarterly" | "annually";
+  status: "active" | "paused";
+  total: number;
+  nextInvoiceDate: string;
+  paymentTermsDays: number;
+  createdAt: string;
+  customer?: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+}) {
+  return {
+    id: row.id,
+    business_id: row.businessId,
+    customer_id: row.customerId,
+    name: row.name,
+    description: row.description,
+    frequency: row.frequency,
+    status: row.status,
+    total: row.total,
+    next_invoice_date: row.nextInvoiceDate,
+    payment_terms_days: row.paymentTermsDays,
+    created_at: row.createdAt,
+    customer: row.customer?.id
+      ? {
+          id: row.customer.id,
+          name: row.customer.name ?? "Unknown",
+          email: row.customer.email,
+          phone: row.customer.phone
+        }
+      : null
+  };
+}
+
 async function getLatestWhatsappDeliveryStatus({
   businessId,
   quoteId,
@@ -160,10 +203,20 @@ export const getDashboardMetrics = cache(async () => {
 
   const [
     [{ customerCount }],
-    [{ quoteCount, acceptedQuoteCount, totalQuoteValue }],
-    [{ unpaidInvoiceCount }],
+    [{ serviceCount }],
+    [
+      {
+        quoteCount,
+        acceptedQuoteCount,
+        sentQuoteCount,
+        draftQuoteCount,
+        totalQuoteValue
+      }
+    ],
+    [{ unpaidInvoiceCount, outstandingInvoiceValue }],
     [{ overdueInvoiceCount }],
     paidInvoices,
+    priorityInvoiceRows,
     recentQuoteRows
   ] = await Promise.all([
     db
@@ -171,15 +224,24 @@ export const getDashboardMetrics = cache(async () => {
       .from(customers)
       .where(eq(customers.businessId, business.id)),
     db
+      .select({ serviceCount: count() })
+      .from(services)
+      .where(eq(services.businessId, business.id)),
+    db
       .select({
         quoteCount: count(),
         acceptedQuoteCount: sql<number>`count(*) filter (where ${quotes.status} = 'accepted')`,
+        sentQuoteCount: sql<number>`count(*) filter (where ${quotes.status} = 'sent')`,
+        draftQuoteCount: sql<number>`count(*) filter (where ${quotes.status} = 'draft')`,
         totalQuoteValue: sql<number>`coalesce(sum(${quotes.total}), 0)`
       })
       .from(quotes)
       .where(eq(quotes.businessId, business.id)),
     db
-      .select({ unpaidInvoiceCount: count() })
+      .select({
+        unpaidInvoiceCount: count(),
+        outstandingInvoiceValue: sql<number>`coalesce(sum(${invoices.total}), 0)`
+      })
       .from(invoices)
       .where(
         and(
@@ -197,6 +259,28 @@ export const getDashboardMetrics = cache(async () => {
       .select({ total: invoices.total })
       .from(invoices)
       .where(and(eq(invoices.businessId, business.id), eq(invoices.status, "paid"))),
+    db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        status: invoices.status,
+        total: invoices.total,
+        dueDate: invoices.dueDate,
+        customer: {
+          id: customers.id,
+          name: customers.name
+        }
+      })
+      .from(invoices)
+      .leftJoin(customers, eq(invoices.customerId, customers.id))
+      .where(
+        and(
+          eq(invoices.businessId, business.id),
+          inArray(invoices.status, ["sent", "overdue"])
+        )
+      )
+      .orderBy(asc(invoices.dueDate))
+      .limit(4),
     db
       .select({
         id: quotes.id,
@@ -218,14 +302,32 @@ export const getDashboardMetrics = cache(async () => {
   ]);
 
   return {
+    business,
     customerCount,
+    serviceCount,
     quoteCount,
     acceptedQuoteCount: Number(acceptedQuoteCount ?? 0),
+    sentQuoteCount: Number(sentQuoteCount ?? 0),
+    draftQuoteCount: Number(draftQuoteCount ?? 0),
     totalQuoteValue: Number(totalQuoteValue ?? 0),
     unpaidInvoiceCount,
     overdueInvoiceCount,
+    outstandingInvoiceValue: Number(outstandingInvoiceValue ?? 0),
     totalRevenue:
       paidInvoices.reduce((sum, invoice) => sum + Number(invoice.total), 0) ?? 0,
+    priorityInvoices: priorityInvoiceRows.map((row) => ({
+      id: row.id,
+      invoice_number: row.invoiceNumber,
+      status: row.status,
+      total: row.total,
+      due_date: row.dueDate,
+      customer: row.customer?.id
+        ? {
+            id: row.customer.id,
+            name: row.customer.name ?? "Unknown"
+          }
+        : null
+    })),
     recentQuotes: recentQuoteRows.map((row) => ({
       id: row.id,
       business_id: row.businessId,
@@ -360,6 +462,37 @@ export const getServices = cache(async () => {
     .orderBy(services.name);
 
   return rows.map((row) => mapService(row));
+});
+
+export const getRecurringInvoiceTemplates = cache(async () => {
+  const business = await requirePaidBusiness();
+
+  const rows = await db
+    .select({
+      id: recurringInvoiceTemplates.id,
+      businessId: recurringInvoiceTemplates.businessId,
+      customerId: recurringInvoiceTemplates.customerId,
+      name: recurringInvoiceTemplates.name,
+      description: recurringInvoiceTemplates.description,
+      frequency: recurringInvoiceTemplates.frequency,
+      status: recurringInvoiceTemplates.status,
+      total: recurringInvoiceTemplates.total,
+      nextInvoiceDate: recurringInvoiceTemplates.nextInvoiceDate,
+      paymentTermsDays: recurringInvoiceTemplates.paymentTermsDays,
+      createdAt: recurringInvoiceTemplates.createdAt,
+      customer: {
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone
+      }
+    })
+    .from(recurringInvoiceTemplates)
+    .leftJoin(customers, eq(recurringInvoiceTemplates.customerId, customers.id))
+    .where(eq(recurringInvoiceTemplates.businessId, business.id))
+    .orderBy(asc(recurringInvoiceTemplates.nextInvoiceDate));
+
+  return rows.map((row) => mapRecurringInvoiceTemplate(row));
 });
 
 export const getServiceById = cache(async (id: string) => {

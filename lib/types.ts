@@ -70,6 +70,21 @@ export type Invoice = {
   items?: InvoiceItem[];
 };
 
+export type RecurringInvoiceTemplate = {
+  id: string;
+  business_id: string;
+  customer_id: string;
+  name: string;
+  description: string;
+  frequency: "monthly" | "quarterly" | "annually";
+  status: "active" | "paused";
+  total: number;
+  next_invoice_date: string;
+  payment_terms_days: number;
+  created_at: string;
+  customer?: Pick<Customer, "id" | "name" | "email" | "phone"> | null;
+};
+
 export type ActivityEvent = {
   id: string;
   business_id: string;

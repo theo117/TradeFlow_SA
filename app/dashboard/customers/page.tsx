@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { CustomersTable } from "@/components/dashboard/customers-table";
 import { ResourceHeader } from "@/components/dashboard/resource-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { buttonVariants } from "@/components/ui/button";
 import { getCustomers } from "@/lib/queries";
 
 export default async function CustomersPage() {
@@ -27,6 +29,15 @@ export default async function CustomersPage() {
           }
         ]}
       />
+
+      <div className="flex justify-end">
+        <Link
+          href="/api/export/customers"
+          className={buttonVariants({ variant: "secondary" })}
+        >
+          Export customers CSV
+        </Link>
+      </div>
 
       {customers.length === 0 ? (
         <EmptyState

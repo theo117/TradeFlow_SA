@@ -45,3 +45,13 @@ export const convertQuoteToInvoiceSchema = z.object({
   quoteId: z.string().uuid(),
   dueDate: z.string().date()
 });
+
+export const recurringInvoiceTemplateSchema = z.object({
+  customerId: z.string().uuid(),
+  name: z.string().min(2),
+  description: z.string().min(2),
+  frequency: z.enum(["monthly", "quarterly", "annually"]),
+  total: z.coerce.number().min(0.01),
+  nextInvoiceDate: z.string().date(),
+  paymentTermsDays: z.coerce.number().int().min(0).max(90)
+});

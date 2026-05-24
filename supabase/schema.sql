@@ -9,6 +9,14 @@ begin
   if not exists (select 1 from pg_type where typname = 'invoice_status') then
     create type invoice_status as enum ('draft', 'sent', 'paid', 'overdue');
   end if;
+
+  if not exists (select 1 from pg_type where typname = 'recurring_frequency') then
+    create type recurring_frequency as enum ('monthly', 'quarterly', 'annually');
+  end if;
+
+  if not exists (select 1 from pg_type where typname = 'recurring_template_status') then
+    create type recurring_template_status as enum ('active', 'paused');
+  end if;
 end
 $$;
 
@@ -131,6 +139,20 @@ create table if not exists public.invoice_items (
   subtotal numeric(12, 2) not null default 0
 );
 
+create table if not exists public.recurring_invoice_templates (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses (id) on delete cascade,
+  customer_id uuid not null references public.customers (id) on delete restrict,
+  name text not null,
+  description text not null,
+  frequency recurring_frequency not null,
+  status recurring_template_status not null default 'active',
+  total numeric(12, 2) not null default 0,
+  next_invoice_date date not null,
+  payment_terms_days integer not null default 7,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.activity_events (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses (id) on delete cascade,
@@ -192,6 +214,10 @@ create index if not exists invoices_customer_id_idx on public.invoices (customer
 create index if not exists invoices_due_date_idx on public.invoices (due_date);
 create index if not exists invoices_status_idx on public.invoices (status);
 create index if not exists invoice_items_invoice_id_idx on public.invoice_items (invoice_id);
+create index if not exists recurring_invoice_templates_business_id_idx on public.recurring_invoice_templates (business_id);
+create index if not exists recurring_invoice_templates_customer_id_idx on public.recurring_invoice_templates (customer_id);
+create index if not exists recurring_invoice_templates_next_invoice_date_idx on public.recurring_invoice_templates (next_invoice_date);
+create index if not exists recurring_invoice_templates_status_idx on public.recurring_invoice_templates (status);
 create index if not exists activity_events_business_id_idx on public.activity_events (business_id);
 create index if not exists activity_events_customer_id_idx on public.activity_events (customer_id);
 create index if not exists activity_events_quote_id_idx on public.activity_events (quote_id);

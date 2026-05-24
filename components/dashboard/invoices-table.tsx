@@ -27,6 +27,33 @@ type InvoiceRow = Pick<
   } | null;
 };
 
+function getDueLabel(invoice: InvoiceRow) {
+  if (invoice.status === "paid") {
+    return "Paid";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(`${invoice.due_date}T00:00:00`);
+  const days = Math.ceil(
+    (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (days < 0) {
+    return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+  }
+
+  if (days === 0) {
+    return "Due today";
+  }
+
+  if (days <= 7) {
+    return `Due in ${days} day${days === 1 ? "" : "s"}`;
+  }
+
+  return "Upcoming";
+}
+
 export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
   const router = useRouter();
   const PAGE_SIZE = 6;
@@ -232,7 +259,14 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                   <td className="px-6 py-4">
                     <Badge variant={invoice.status}>{invoice.status}</Badge>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">{formatDate(invoice.due_date)}</td>
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-ink">
+                      {formatDate(invoice.due_date)}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {getDueLabel(invoice)}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 font-medium text-ink">
                     {currency(Number(invoice.total))}
                   </td>
@@ -308,7 +342,9 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
               </div>
 
               <div className="flex items-center justify-between text-sm text-slate-500">
-                <span>Due {formatDate(invoice.due_date)}</span>
+                <span>
+                  Due {formatDate(invoice.due_date)} &middot; {getDueLabel(invoice)}
+                </span>
                 <Link
                   href={`/dashboard/invoices/${invoice.id}`}
                   className="inline-flex items-center gap-1 font-medium text-brand-700"
