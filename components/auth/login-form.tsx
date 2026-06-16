@@ -41,7 +41,7 @@ export function LoginForm({
       ]);
 
       if (!result || result.error || !result.ok) {
-        setError("Invalid email or password");
+        setError("The email or password does not match. Please check your password and try again.");
         setPending(false);
         return;
       }

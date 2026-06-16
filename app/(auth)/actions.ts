@@ -73,7 +73,7 @@ export async function login(formData: FormData) {
           metadata: { email }
         });
       }
-      redirect("/login?error=Invalid%20email%20or%20password");
+      redirect("/login?error=The%20email%20or%20password%20does%20not%20match.%20Please%20check%20your%20password%20and%20try%20again.");
     }
     if (error instanceof ZodError) {
       redirect("/login?error=Please%20enter%20a%20valid%20email%20and%20password");
