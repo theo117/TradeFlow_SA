@@ -27,6 +27,8 @@ TradeFlow SA helps small South African service businesses manage customers, serv
    - `DATABASE_URL_UNPOOLED`
    - `NEXT_PUBLIC_APP_URL`
    - `AUTH_SECRET`
+   - `RESEND_API_KEY`
+   - `EMAIL_FROM`
    - `PAYFAST_MERCHANT_ID`
    - `PAYFAST_MERCHANT_KEY`
    - `PAYFAST_PASSPHRASE`
@@ -153,6 +155,8 @@ This app is ready for standard Next.js deployment on Vercel.
    - `DATABASE_URL_UNPOOLED`
    - `AUTH_SECRET`
    - `NEXT_PUBLIC_APP_URL`
+   - `RESEND_API_KEY`
+   - `EMAIL_FROM`
    - `PAYFAST_MERCHANT_ID`
    - `PAYFAST_MERCHANT_KEY`
    - `PAYFAST_PASSPHRASE`
@@ -185,6 +189,27 @@ Sources:
 - https://vercel.com/docs/environment-variables
 - https://vercel.com/docs/cli/env
 - https://vercel.com/docs/frameworks/nextjs
+
+## Email Confirmation Deployment
+
+Before charging customers, confirm the production email-confirmation path is live.
+
+1. Apply the dedicated Neon migration:
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260617_email_confirmation.sql
+```
+
+2. Set production email env vars in Vercel:
+   - `RESEND_API_KEY`
+   - `EMAIL_FROM`
+   - `NEXT_PUBLIC_APP_URL`
+
+3. Redeploy production after the env vars are saved.
+4. Register a test account with an inbox you control.
+5. Confirm that the inbox receives the email, the `/verify-email?token=...` link marks the account verified, and login is blocked before confirmation but succeeds after confirmation.
+
+In production, missing `RESEND_API_KEY` or `EMAIL_FROM` now fails registration instead of silently logging a confirmation link.
 
 ## Logo Uploads
 

@@ -11,6 +11,10 @@ import { db } from "@/lib/db";
 import { businesses, users } from "@/lib/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import {
+  createEmailVerificationToken,
+  sendEmailVerification
+} from "@/lib/email-verification";
+import {
   buildLoginThrottleKey,
   clearFailedLogin,
   isLoginBlocked,
@@ -107,7 +111,7 @@ export async function register(formData: FormData) {
 
     const passwordHash = await hashPassword(payload.password);
 
-    await db.transaction(async (tx) => {
+    const userId = await db.transaction(async (tx) => {
       const [user] = await tx
         .insert(users)
         .values({
@@ -121,23 +125,25 @@ export async function register(formData: FormData) {
         name: payload.businessName,
         email
       });
+
+      return user.id;
+    });
+
+    const verification = await createEmailVerificationToken(userId);
+    await sendEmailVerification({
+      email,
+      verificationUrl: verification.url
     });
 
     await logAuditEvent({
-      action: "auth.register_succeeded",
+      action: "auth.register_pending_email_verification",
       entityType: "user",
       entityId: email,
       ip,
       metadata: { businessName: payload.businessName, email }
     });
 
-    await signIn("credentials", {
-      email,
-      password: payload.password,
-      redirectTo: "/dashboard"
-    });
-
-    redirect("/dashboard");
+    redirect(`/verify-email?sent=1&email=${encodeURIComponent(email)}`);
   } catch (error) {
     if (error instanceof AuthError) {
       redirect("/login?error=Unable%20to%20log%20in%20after%20registration");

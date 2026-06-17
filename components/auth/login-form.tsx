@@ -41,7 +41,11 @@ export function LoginForm({
       ]);
 
       if (!result || result.error || !result.ok) {
-        setError("The email or password does not match. Please check your password and try again.");
+        setError(
+          result?.code === "email_not_verified"
+            ? "Please confirm your email address before logging in."
+            : "The email or password does not match. Please check your password and try again."
+        );
         setPending(false);
         return;
       }

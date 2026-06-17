@@ -41,6 +41,10 @@ export const users = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
+    emailVerifiedAt: timestamp("email_verified_at", {
+      withTimezone: true,
+      mode: "string"
+    }),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string"
@@ -50,6 +54,40 @@ export const users = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email)
+  })
+);
+
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "string"
+    }).notNull(),
+    usedAt: timestamp("used_at", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("email_verification_tokens_token_hash_idx").on(
+      table.tokenHash
+    ),
+    userIdx: index("email_verification_tokens_user_id_idx").on(table.userId),
+    expiresAtIdx: index("email_verification_tokens_expires_at_idx").on(
+      table.expiresAt
+    )
   })
 );
 

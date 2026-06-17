@@ -26,6 +26,22 @@ create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
   password_hash text not null,
+  email_verified_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.users add column if not exists email_verified_at timestamptz;
+
+update public.users
+set email_verified_at = created_at
+where email_verified_at is null;
+
+create table if not exists public.email_verification_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  used_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -200,6 +216,9 @@ create table if not exists public.audit_events (
 );
 
 create unique index if not exists users_email_idx on public.users (email);
+create unique index if not exists email_verification_tokens_token_hash_idx on public.email_verification_tokens (token_hash);
+create index if not exists email_verification_tokens_user_id_idx on public.email_verification_tokens (user_id);
+create index if not exists email_verification_tokens_expires_at_idx on public.email_verification_tokens (expires_at);
 create unique index if not exists businesses_owner_id_idx on public.businesses (owner_id);
 create unique index if not exists businesses_billing_customer_id_idx on public.businesses (billing_customer_id);
 create unique index if not exists businesses_billing_subscription_id_idx on public.businesses (billing_subscription_id);

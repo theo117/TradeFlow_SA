@@ -1,7 +1,9 @@
 .next
 node_modules
 .tools
-.env.local
+.env
+.env.*
+!.env.example
 coverage
 dist
 *.tsbuildinfo

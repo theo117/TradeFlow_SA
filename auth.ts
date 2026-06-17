@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { eq } from "drizzle-orm";
 import authConfig from "@/auth.config";
@@ -6,6 +6,10 @@ import { loginSchema } from "@/lib/validations";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { verifyPassword } from "@/lib/password";
+
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email_not_verified";
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -39,6 +43,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!isValidPassword) {
           return null;
+        }
+
+        if (!user.emailVerifiedAt) {
+          throw new EmailNotVerifiedError();
         }
 
         return {
