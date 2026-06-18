@@ -19,6 +19,7 @@ Use this checklist before moving beyond pilots. Run it against the deployed app 
   - Payfast vars if billing QA is in scope
 - Confirm `NEXT_PUBLIC_APP_URL` exactly matches the production domain.
 - Keep `BILLING_ENFORCEMENT=off` unless actively testing lockout behavior.
+- Keep `KEY_FEATURE_TRIAL_LOCK=on` and `KEY_FEATURE_TRIAL_DAYS=3` if testing the 3-day continuation flow.
 - Open Vercel Runtime Logs and be ready to search by `message`, `requestId`, `businessId`, `quoteId`, `invoiceId`, and `paymentId`.
 
 ## Test Data
@@ -243,6 +244,26 @@ Expected:
 - With enforcement on, paid workflows redirect to `/dashboard/billing?error=Billing%20required`.
 - Vercel logs include `Billing access denied`.
 
+## 14. Three-Day Feature Lock
+
+Run this when testing manual continuation instead of Payfast.
+
+Steps:
+
+1. Set `BILLING_ENFORCEMENT=off`.
+2. Set `KEY_FEATURE_TRIAL_LOCK=on`.
+3. Set a test business `trial_ends_at` to a past timestamp in Neon.
+4. Try to create a customer, service, quote, or invoice.
+5. Open `/dashboard/billing`.
+
+Expected:
+
+- Key workflows redirect to `/dashboard/billing?error=Billing%20required`.
+- Dashboard, settings, billing, legal pages, and contact paths remain accessible.
+- Billing page shows the contact section.
+- Contact email opens a message to `CONTINUATION_CONTACT_EMAIL`.
+- WhatsApp contact button appears only when `CONTINUATION_CONTACT_WHATSAPP` is set.
+
 ## Sign-Off
 
 | Area | Pass/Fail | Notes |
@@ -263,5 +284,6 @@ Expected:
 | Billing checkout |  |  |
 | Failed/cancelled billing |  |  |
 | Access control |  |  |
+| Three-day feature lock |  |  |
 
 Do not broadly launch paid access until every row is passed or has an explicitly accepted risk.

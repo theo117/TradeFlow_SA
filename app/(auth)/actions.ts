@@ -33,6 +33,7 @@ import {
   registerSchema,
   resetPasswordSchema
 } from "@/lib/validations";
+import { getKeyFeatureTrialDays } from "@/lib/auth";
 
 function isRedirectError(error: unknown) {
   return (
@@ -165,7 +166,10 @@ export async function register(formData: FormData) {
       await tx.insert(businesses).values({
         ownerId: user.id,
         name: payload.businessName,
-        email
+        email,
+        trialEndsAt: new Date(
+          Date.now() + getKeyFeatureTrialDays() * 24 * 60 * 60 * 1000
+        ).toISOString()
       });
 
       return user.id;

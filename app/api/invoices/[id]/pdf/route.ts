@@ -6,6 +6,7 @@ import { businesses, invoices } from "@/lib/db/schema";
 import { validatePublicAccessToken } from "@/lib/public-access";
 import { getPublicInvoiceById } from "@/lib/queries";
 import { generateInvoicePdf } from "@/lib/pdf/invoice";
+import { hasBillingAccess } from "@/lib/auth";
 import {
   getRequestLogContext,
   logError,
@@ -31,12 +32,35 @@ export async function GET(
 
     const [ownedInvoice] = session?.user?.id
       ? await db
-          .select({ id: invoices.id })
+          .select({
+            id: invoices.id,
+            subscriptionStatus: businesses.subscriptionStatus,
+            currentPeriodEnd: businesses.currentPeriodEnd,
+            trialEndsAt: businesses.trialEndsAt,
+            createdAt: businesses.createdAt
+          })
           .from(invoices)
           .innerJoin(businesses, eq(invoices.businessId, businesses.id))
           .where(and(eq(invoices.id, id), eq(businesses.ownerId, session.user.id)))
           .limit(1)
       : [];
+
+    if (
+      ownedInvoice?.id &&
+      !hasBillingAccess({
+        subscription_status: ownedInvoice.subscriptionStatus,
+        current_period_end: ownedInvoice.currentPeriodEnd,
+        trial_ends_at: ownedInvoice.trialEndsAt,
+        created_at: ownedInvoice.createdAt
+      })
+    ) {
+      logWarn("Invoice PDF access expired", {
+        ...requestContext,
+        invoiceId: id,
+        ms: Date.now() - startedAt
+      });
+      return new NextResponse("Billing required", { status: 403 });
+    }
 
     if (
       !ownedInvoice?.id &&

@@ -6,6 +6,7 @@ import { businesses, quotes } from "@/lib/db/schema";
 import { validatePublicAccessToken } from "@/lib/public-access";
 import { getPublicQuoteById } from "@/lib/queries";
 import { generateQuotePdf } from "@/lib/pdf/quote";
+import { hasBillingAccess } from "@/lib/auth";
 import {
   getRequestLogContext,
   logError,
@@ -31,12 +32,35 @@ export async function GET(
 
     const [ownedQuote] = session?.user?.id
       ? await db
-          .select({ id: quotes.id })
+          .select({
+            id: quotes.id,
+            subscriptionStatus: businesses.subscriptionStatus,
+            currentPeriodEnd: businesses.currentPeriodEnd,
+            trialEndsAt: businesses.trialEndsAt,
+            createdAt: businesses.createdAt
+          })
           .from(quotes)
           .innerJoin(businesses, eq(quotes.businessId, businesses.id))
           .where(and(eq(quotes.id, id), eq(businesses.ownerId, session.user.id)))
           .limit(1)
       : [];
+
+    if (
+      ownedQuote?.id &&
+      !hasBillingAccess({
+        subscription_status: ownedQuote.subscriptionStatus,
+        current_period_end: ownedQuote.currentPeriodEnd,
+        trial_ends_at: ownedQuote.trialEndsAt,
+        created_at: ownedQuote.createdAt
+      })
+    ) {
+      logWarn("Quote PDF access expired", {
+        ...requestContext,
+        quoteId: id,
+        ms: Date.now() - startedAt
+      });
+      return new NextResponse("Billing required", { status: 403 });
+    }
 
     if (
       !ownedQuote?.id &&

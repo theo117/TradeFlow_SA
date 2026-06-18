@@ -108,6 +108,7 @@ describe("payfast billing", () => {
 
 describe("billing access", () => {
   const originalBillingEnforcement = process.env.BILLING_ENFORCEMENT;
+  const originalTrialLock = process.env.KEY_FEATURE_TRIAL_LOCK;
 
   function business(overrides: Partial<Business> = {}): Business {
     return {
@@ -141,14 +142,30 @@ describe("billing access", () => {
 
   afterEach(() => {
     process.env.BILLING_ENFORCEMENT = originalBillingEnforcement;
+    process.env.KEY_FEATURE_TRIAL_LOCK = originalTrialLock;
   });
 
-  it("allows all businesses while enforcement is off", () => {
+  it("allows non-trial businesses while billing enforcement is off", () => {
     process.env.BILLING_ENFORCEMENT = "off";
+    process.env.KEY_FEATURE_TRIAL_LOCK = "off";
 
     expect(hasBillingAccess(business({ subscription_status: "cancelled" }))).toBe(
       true
     );
+  });
+
+  it("blocks expired trialing businesses when the key feature lock is on", () => {
+    process.env.BILLING_ENFORCEMENT = "off";
+    process.env.KEY_FEATURE_TRIAL_LOCK = "on";
+
+    expect(
+      hasBillingAccess(
+        business({
+          subscription_status: "trialing",
+          trial_ends_at: "2020-01-01T00:00:00.000Z"
+        })
+      )
+    ).toBe(false);
   });
 
   it("allows active subscriptions and current trials while enforcement is on", () => {

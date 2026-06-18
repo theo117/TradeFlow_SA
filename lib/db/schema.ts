@@ -160,7 +160,7 @@ export const businesses = pgTable(
     trialEndsAt: timestamp("trial_ends_at", {
       withTimezone: true,
       mode: "string"
-    }).default(sql`now() + interval '14 days'`),
+    }).default(sql`now() + interval '3 days'`),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string"

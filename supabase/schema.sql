@@ -77,7 +77,7 @@ create table if not exists public.businesses (
   billing_plan_id text,
   subscription_status text not null default 'trialing',
   current_period_end timestamptz,
-  trial_ends_at timestamptz default now() + interval '14 days',
+  trial_ends_at timestamptz default now() + interval '3 days',
   created_at timestamptz not null default now()
 );
 
@@ -95,7 +95,7 @@ alter table public.businesses add column if not exists billing_subscription_id t
 alter table public.businesses add column if not exists billing_plan_id text;
 alter table public.businesses add column if not exists subscription_status text not null default 'trialing';
 alter table public.businesses add column if not exists current_period_end timestamptz;
-alter table public.businesses add column if not exists trial_ends_at timestamptz default now() + interval '14 days';
+alter table public.businesses add column if not exists trial_ends_at timestamptz default now() + interval '3 days';
 
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),

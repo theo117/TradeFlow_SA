@@ -37,6 +37,10 @@ TradeFlow SA helps small South African service businesses manage customers, serv
    - `PAYFAST_PLAN_STARTER_AMOUNT`
    - `PAYFAST_PLAN_PRO_AMOUNT`
    - `BILLING_ENFORCEMENT`
+   - `KEY_FEATURE_TRIAL_LOCK`
+   - `KEY_FEATURE_TRIAL_DAYS`
+   - `CONTINUATION_CONTACT_EMAIL`
+   - `CONTINUATION_CONTACT_WHATSAPP`
    - `BLOB_READ_WRITE_TOKEN`
 3. Create a PostgreSQL database.
 4. Run the SQL in [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
@@ -166,6 +170,10 @@ This app is ready for standard Next.js deployment on Vercel.
    - `PAYFAST_PLAN_STARTER_AMOUNT`
    - `PAYFAST_PLAN_PRO_AMOUNT`
    - `BILLING_ENFORCEMENT`
+   - `KEY_FEATURE_TRIAL_LOCK`
+   - `KEY_FEATURE_TRIAL_DAYS`
+   - `CONTINUATION_CONTACT_EMAIL`
+   - `CONTINUATION_CONTACT_WHATSAPP`
    - `BLOB_READ_WRITE_TOKEN`
 4. Set `NEXT_PUBLIC_APP_URL` to your production domain, for example `https://your-app.vercel.app`.
 5. Deploy.
@@ -304,6 +312,28 @@ Sources:
 - https://payfast.io/features/subscriptions/
 - https://payfast.io/faq/merchant-faqs/
 - https://status.payfast.io/
+
+## Three-Day Access Window
+
+Key workflow routes use `requirePaidBusiness()`. With `KEY_FEATURE_TRIAL_LOCK=on`, trialing businesses can use key features for `KEY_FEATURE_TRIAL_DAYS` days, then they are redirected to `/dashboard/billing` with a contact section.
+
+Use this while Payfast is skipped:
+
+```env
+BILLING_ENFORCEMENT=off
+KEY_FEATURE_TRIAL_LOCK=on
+KEY_FEATURE_TRIAL_DAYS=3
+CONTINUATION_CONTACT_EMAIL=support@tradeflowsa.co.za
+CONTINUATION_CONTACT_WHATSAPP=
+```
+
+Apply the dedicated Neon migration so new database defaults use 3 days:
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260618_three_day_access_window.sql
+```
+
+To manually extend a pilot, update `businesses.trial_ends_at` in Neon or set the business to an active paid status with a future `current_period_end`.
 
 ## Operational Visibility
 
