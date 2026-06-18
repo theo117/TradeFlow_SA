@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { activityEvents } from "@/lib/db/schema";
+import { logError } from "@/lib/observability";
 
 export async function logActivityEvent({
   businessId,
@@ -29,13 +30,12 @@ export async function logActivityEvent({
       channel: channel ?? null
     });
   } catch (error) {
-    console.error("Activity event logging failed", {
+    logError("Activity event logging failed", error, {
       type,
       businessId,
       customerId,
       quoteId,
-      invoiceId,
-      error
+      invoiceId
     });
   }
 }

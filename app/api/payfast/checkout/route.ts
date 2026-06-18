@@ -66,6 +66,11 @@ export async function GET(request: Request) {
     amount,
     item_name: itemName,
     item_description: `${itemName} access for TradeFlow SA`,
+    subscription_type: "1",
+    billing_date: new Date().toISOString().slice(0, 10),
+    recurring_amount: amount,
+    frequency: "3",
+    cycles: "0",
     custom_str1: business.id,
     custom_str2: plan
   };

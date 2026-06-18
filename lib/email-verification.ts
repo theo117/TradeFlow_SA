@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailVerificationTokens, users } from "@/lib/db/schema";
+import { logInfo } from "@/lib/observability";
 
 const TOKEN_BYTES = 32;
 const TOKEN_TTL_HOURS = 24;
@@ -103,8 +104,7 @@ export async function sendEmailVerification({
   const emailProvider = getEmailProviderConfig();
 
   if (!emailProvider) {
-    console.info("Email verification link generated", {
-      email,
+    logInfo("Email verification link generated for local development", {
       verificationUrl
     });
     return;

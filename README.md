@@ -36,6 +36,7 @@ TradeFlow SA helps small South African service businesses manage customers, serv
    - `PAYFAST_VALIDATE_URL`
    - `PAYFAST_PLAN_STARTER_AMOUNT`
    - `PAYFAST_PLAN_PRO_AMOUNT`
+   - `BILLING_ENFORCEMENT`
    - `BLOB_READ_WRITE_TOKEN`
 3. Create a PostgreSQL database.
 4. Run the SQL in [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
@@ -164,6 +165,7 @@ This app is ready for standard Next.js deployment on Vercel.
    - `PAYFAST_VALIDATE_URL`
    - `PAYFAST_PLAN_STARTER_AMOUNT`
    - `PAYFAST_PLAN_PRO_AMOUNT`
+   - `BILLING_ENFORCEMENT`
    - `BLOB_READ_WRITE_TOKEN`
 4. Set `NEXT_PUBLIC_APP_URL` to your production domain, for example `https://your-app.vercel.app`.
 5. Deploy.
@@ -251,10 +253,47 @@ https://your-domain.com/api/payfast/notify
 4. Re-run [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql) so the billing columns exist.
 5. Confirm recurring billing is enabled if you later move beyond manual monthly renewals.
 
+Sandbox verification checklist:
+
+1. Set sandbox merchant credentials and sandbox URLs in Vercel preview or production:
+   - `PAYFAST_PROCESS_URL`
+   - `PAYFAST_VALIDATE_URL`
+2. Keep `BILLING_ENFORCEMENT=off` while testing checkout without locking users out.
+3. Open `/dashboard/billing`, start the Starter and Pro checkout flows, and confirm Payfast receives the recurring subscription fields.
+4. Confirm Payfast calls `https://your-domain.com/api/payfast/notify`.
+5. Verify successful ITNs set `subscription_status=active`, `billing_plan_id`, `billing_subscription_id`, and `current_period_end`.
+6. Verify failed ITNs set `subscription_status=past_due`.
+7. Verify cancelled ITNs set `subscription_status=cancelled`.
+8. Set `BILLING_ENFORCEMENT=on` only after the failed and cancelled paths redirect locked users back to `/dashboard/billing`.
+
 Sources:
 - https://payfast.io/features/subscriptions/
 - https://payfast.io/faq/merchant-faqs/
 - https://status.payfast.io/
+
+## Operational Visibility
+
+The app emits structured JSON logs for the highest-risk production flows:
+
+- Auth registration, login success/failure, and rate-limit blocks
+- Payfast ITN receipt, rejection, amount mismatch, ignored events, and processed events
+- WhatsApp webhook verification, signature failures, invalid payloads, and processing failures
+- Quote and invoice PDF generation start, access denial, missing source data, success, and failure
+- Audit/activity logging failures and business lookup database failures
+
+Start with Vercel Runtime Logs while piloting. Search by `message`, `requestId`, `businessId`, `paymentId`, `quoteId`, or `invoiceId`.
+
+Recommended next step before broad launch:
+
+1. Add a Vercel Log Drain to a long-term log store.
+2. Create alerts for:
+   - `Payfast ITN rejected`
+   - `Payfast ITN amount mismatch`
+   - `WhatsApp webhook processing failed`
+   - `Invoice PDF generation failed`
+   - `Quote PDF generation failed`
+   - `Business lookup failed`
+3. Review the `audit_events` table weekly during pilots for auth, sharing, and billing anomalies.
 
 ## Auth flow
 

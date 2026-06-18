@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { auditEvents } from "@/lib/db/schema";
+import { logError } from "@/lib/observability";
 
 export async function logAuditEvent({
   businessId,
@@ -29,6 +30,6 @@ export async function logAuditEvent({
       metadata: metadata ?? null
     });
   } catch (error) {
-    console.error("Audit event logging failed", { action, entityId, error });
+    logError("Audit event logging failed", error, { action, entityId });
   }
 }

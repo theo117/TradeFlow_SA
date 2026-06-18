@@ -1,6 +1,7 @@
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb, type RGB } from "pdf-lib";
 import type { Business, Customer, Quote, QuoteItem } from "@/lib/types";
 import { currency, formatDate } from "@/lib/utils";
+import { logWarn } from "@/lib/observability";
 
 type QuotePdfPayload = {
   business: Pick<
@@ -353,6 +354,9 @@ async function drawLogo(
     const response = await fetch(logoUrl);
 
     if (!response.ok) {
+      logWarn("Quote PDF logo fetch failed", {
+        status: response.status
+      });
       return;
     }
 
@@ -375,8 +379,11 @@ async function drawLogo(
       width: scaledWidth,
       height: scaledHeight
     });
-  } catch {
+  } catch (error) {
     // Ignore logo fetch or embed errors and keep rendering the quote.
+    logWarn("Quote PDF logo embed failed", {
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 

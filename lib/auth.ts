@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { businesses } from "@/lib/db/schema";
 import type { Business } from "@/lib/types";
+import { logError, logWarn } from "@/lib/observability";
 
 export async function requireUser() {
   const session = await auth();
@@ -18,11 +19,18 @@ export async function requireUser() {
 
 export async function requireBusiness() {
   const user = await requireUser();
-  const [business] = await db
-    .select()
-    .from(businesses)
-    .where(eq(businesses.ownerId, user.id))
-    .limit(1);
+  let business;
+
+  try {
+    [business] = await db
+      .select()
+      .from(businesses)
+      .where(eq(businesses.ownerId, user.id))
+      .limit(1);
+  } catch (error) {
+    logError("Business lookup failed", error, { userId: user.id });
+    throw error;
+  }
 
   if (!business) {
     redirect("/register");
@@ -57,11 +65,37 @@ export async function requireBusiness() {
 }
 
 export function hasBillingAccess(business: Business) {
-  // Early-access mode: billing is not enforced yet.
-  void business;
-  return true;
+  if (process.env.BILLING_ENFORCEMENT !== "on") {
+    return true;
+  }
+
+  if (business.subscription_status === "active") {
+    return hasFutureDate(business.current_period_end);
+  }
+
+  if (business.subscription_status === "trialing") {
+    return hasFutureDate(business.trial_ends_at);
+  }
+
+  return false;
 }
 
 export async function requirePaidBusiness() {
-  return requireBusiness();
+  const business = await requireBusiness();
+
+  if (!hasBillingAccess(business)) {
+    logWarn("Billing access denied", {
+      businessId: business.id,
+      subscriptionStatus: business.subscription_status,
+      currentPeriodEnd: business.current_period_end,
+      trialEndsAt: business.trial_ends_at
+    });
+    redirect("/dashboard/billing?error=Billing%20required");
+  }
+
+  return business;
+}
+
+function hasFutureDate(value: string | null) {
+  return Boolean(value && new Date(value).getTime() > Date.now());
 }

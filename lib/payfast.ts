@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 
 export type BillingPlan = "starter" | "pro";
+export type PayfastPaymentStatus = "COMPLETE" | "FAILED" | "CANCELLED";
 
 type PayfastFieldValue = string | number | undefined | null;
 
@@ -53,7 +54,6 @@ export function createPayfastSignature(
 ) {
   const payload = Object.entries(fields)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([key, value]) =>
         `${key}=${encodeURIComponent(String(value)).replace(/%20/g, "+")}`
@@ -63,6 +63,36 @@ export function createPayfastSignature(
   return createHash("md5")
     .update(`${payload}&passphrase=${encodeURIComponent(passphrase)}`)
     .digest("hex");
+}
+
+export function parsePayfastPaymentStatus(
+  value: string | null
+): PayfastPaymentStatus | null {
+  if (value === "COMPLETE" || value === "FAILED" || value === "CANCELLED") {
+    return value;
+  }
+
+  return null;
+}
+
+export function getSubscriptionStatusForPayfastPayment(
+  status: PayfastPaymentStatus
+) {
+  if (status === "COMPLETE") {
+    return "active";
+  }
+
+  if (status === "FAILED") {
+    return "past_due";
+  }
+
+  return "cancelled";
+}
+
+export function addBillingMonth(date: Date) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + 1);
+  return next.toISOString();
 }
 
 export async function validatePayfastNotification(

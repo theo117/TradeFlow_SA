@@ -3,10 +3,20 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses } from "@/lib/db/schema";
 import {
+  addBillingMonth,
+  getSubscriptionStatusForPayfastPayment,
   getPlanAmount,
+  parsePayfastPaymentStatus,
   type BillingPlan,
   validatePayfastNotification
 } from "@/lib/payfast";
+import { logAuditEvent } from "@/lib/audit";
+import {
+  getRequestLogContext,
+  logError,
+  logInfo,
+  logWarn
+} from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -18,35 +28,101 @@ function parsePlan(value: string | null): BillingPlan | null {
   return null;
 }
 
-function addMonth(date: Date) {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() + 1);
-  return next.toISOString();
-}
-
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestContext = getRequestLogContext(request);
   const body = await request.text();
   const params = new URLSearchParams(body);
   const signature = params.get("signature");
+  const paymentId = params.get("m_payment_id");
+  const pfPaymentId = params.get("pf_payment_id");
+
+  logInfo("Payfast ITN received", {
+    ...requestContext,
+    paymentId,
+    pfPaymentId,
+    paymentStatus: params.get("payment_status")
+  });
+
   const isValid = await validatePayfastNotification(body, signature);
 
   if (!isValid) {
+    await logAuditEvent({
+      action: "billing.payfast_itn_invalid",
+      entityType: "payfast_itn",
+      entityId: paymentId,
+      metadata: {
+        paymentStatus: params.get("payment_status"),
+        pfPaymentId
+      }
+    });
+    logWarn("Payfast ITN rejected", {
+      ...requestContext,
+      paymentId,
+      pfPaymentId,
+      ms: Date.now() - startedAt
+    });
     return new NextResponse("Invalid ITN", { status: 400 });
   }
 
   const businessId = params.get("custom_str1");
   const plan = parsePlan(params.get("custom_str2"));
-  const paymentStatus = params.get("payment_status");
+  const paymentStatus = parsePayfastPaymentStatus(params.get("payment_status"));
   const amountGross = params.get("amount_gross");
-  const pfPaymentId = params.get("pf_payment_id");
 
-  if (!businessId || !plan || paymentStatus !== "COMPLETE") {
+  if (!businessId || !plan || !paymentStatus) {
+    await logAuditEvent({
+      action: "billing.payfast_itn_ignored",
+      entityType: "payfast_itn",
+      entityId: paymentId,
+      metadata: {
+        businessId,
+        plan: params.get("custom_str2"),
+        paymentStatus: params.get("payment_status"),
+        pfPaymentId
+      }
+    });
+    logWarn("Payfast ITN ignored", {
+      ...requestContext,
+      paymentId,
+      pfPaymentId,
+      businessId,
+      plan: params.get("custom_str2"),
+      paymentStatus: params.get("payment_status"),
+      ms: Date.now() - startedAt
+    });
     return NextResponse.json({ received: true });
   }
 
-  if (Number(amountGross ?? 0).toFixed(2) !== getPlanAmount(plan)) {
+  if (
+    paymentStatus === "COMPLETE" &&
+    Number(amountGross ?? 0).toFixed(2) !== getPlanAmount(plan)
+  ) {
+    await logAuditEvent({
+      action: "billing.payfast_itn_amount_mismatch",
+      entityType: "business",
+      entityId: businessId,
+      metadata: {
+        amountGross,
+        expectedAmount: getPlanAmount(plan),
+        paymentStatus,
+        pfPaymentId
+      }
+    });
+    logError("Payfast ITN amount mismatch", undefined, {
+      ...requestContext,
+      paymentId,
+      pfPaymentId,
+      businessId,
+      amountGross,
+      expectedAmount: getPlanAmount(plan),
+      ms: Date.now() - startedAt
+    });
     return new NextResponse("Invalid payment amount", { status: 400 });
   }
+
+  const subscriptionStatus =
+    getSubscriptionStatusForPayfastPayment(paymentStatus);
 
   await db
     .update(businesses)
@@ -55,10 +131,34 @@ export async function POST(request: Request) {
       billingCustomerId: params.get("email_address"),
       billingSubscriptionId: pfPaymentId,
       billingPlanId: plan,
-      subscriptionStatus: "active",
-      currentPeriodEnd: addMonth(new Date())
+      subscriptionStatus,
+      currentPeriodEnd:
+        paymentStatus === "COMPLETE" ? addBillingMonth(new Date()) : undefined
     })
     .where(eq(businesses.id, businessId));
+
+  await logAuditEvent({
+    action: "billing.payfast_itn_processed",
+    entityType: "business",
+    entityId: businessId,
+    metadata: {
+      plan,
+      paymentStatus,
+      subscriptionStatus,
+      pfPaymentId
+    }
+  });
+
+  logInfo("Payfast ITN processed", {
+    ...requestContext,
+    paymentId,
+    pfPaymentId,
+    businessId,
+    plan,
+    paymentStatus,
+    subscriptionStatus,
+    ms: Date.now() - startedAt
+  });
 
   return NextResponse.json({ received: true });
 }

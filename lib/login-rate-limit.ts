@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { loginRateLimits } from "@/lib/db/schema";
+import { logWarn } from "@/lib/observability";
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -32,7 +33,7 @@ export async function isLoginBlocked(key: string) {
     );
   } catch (error) {
     if (isMissingRelationError(error)) {
-      console.warn("Login rate limit table is missing; allowing login flow to continue.");
+      logWarn("Login rate limit table is missing; allowing login flow to continue.");
       return false;
     }
 
@@ -82,7 +83,7 @@ export async function recordFailedLogin(key: string) {
       .where(eq(loginRateLimits.identifier, key));
   } catch (error) {
     if (isMissingRelationError(error)) {
-      console.warn("Login rate limit table is missing; failed login was not recorded.");
+      logWarn("Login rate limit table is missing; failed login was not recorded.");
       return;
     }
 
@@ -95,7 +96,7 @@ export async function clearFailedLogin(key: string) {
     await db.delete(loginRateLimits).where(eq(loginRateLimits.identifier, key));
   } catch (error) {
     if (isMissingRelationError(error)) {
-      console.warn("Login rate limit table is missing; clear failed login was skipped.");
+      logWarn("Login rate limit table is missing; clear failed login was skipped.");
       return;
     }
 
