@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { legalLinks } from "@/lib/legal";
 
 export default function HomePage() {
   return (
@@ -45,6 +46,17 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        <footer className="flex flex-col gap-3 border-t border-slate-200 py-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 TradeFlow SA</p>
+          <nav className="flex flex-wrap gap-3">
+            {legalLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="hover:text-brand-700">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </footer>
       </div>
     </main>
   );

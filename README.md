@@ -232,6 +232,21 @@ Recovery QA checklist:
 5. Confirm the reset link cannot be reused.
 6. Confirm short passwords keep the user on the reset page with a validation message.
 
+## Legal and Commercial Pages
+
+Public legal pages are available at:
+
+- `/terms`
+- `/privacy`
+- `/refund-policy`
+- `/contact`
+
+The shared business details live in [lib/legal.ts](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/lib/legal.ts). Before broad paid launch, replace the placeholder support/privacy emails and add the registered legal entity details, registration number, and customer support contact details. These pages are starter documents and should be reviewed for your final business structure and POPIA obligations.
+
+## Production QA
+
+Use [docs/production-qa.md](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/docs/production-qa.md) before charging outside pilots. It covers register, email confirmation, login, customer/service setup, quote creation, invoice conversion, sharing, logo upload, PDF download, password recovery, billing checkout, failed billing, and access-control sign-off.
+
 ## Logo Uploads
 
 Business logo uploads use Vercel Blob.

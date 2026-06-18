@@ -1,5 +1,7 @@
 import { ReactNode } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { legalLinks } from "@/lib/legal";
 
 export function AuthShell({
   title,
@@ -31,6 +33,13 @@ export function AuthShell({
               <p className="text-sm text-slate-500">{subtitle}</p>
             </div>
             {children}
+            <nav className="flex flex-wrap gap-3 pt-2 text-xs text-slate-400">
+              {legalLinks.map((link) => (
+                <Link key={link.href} href={link.href} className="hover:text-brand-700">
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           </div>
         </Card>
       </div>

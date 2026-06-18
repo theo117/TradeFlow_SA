@@ -17,6 +17,7 @@ import {
 import { logout } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { legalLinks } from "@/lib/legal";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -116,7 +117,15 @@ export function Sidebar({
           })}
         </nav>
 
-        <form action={logout} className="mt-auto">
+        <div className="mt-auto space-y-4">
+          <nav className="flex flex-wrap gap-x-3 gap-y-2 px-1 text-xs text-slate-400">
+            {legalLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="hover:text-white">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <form action={logout}>
           <Button
             className="w-full justify-start gap-3 border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
             variant="ghost"
@@ -125,7 +134,8 @@ export function Sidebar({
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
-        </form>
+          </form>
+        </div>
       </aside>
     </>
   );
