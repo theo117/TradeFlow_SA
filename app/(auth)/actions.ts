@@ -16,13 +16,23 @@ import {
 } from "@/lib/email-verification";
 import { logError, logInfo, logWarn } from "@/lib/observability";
 import {
+  createPasswordResetToken,
+  resetPasswordWithToken,
+  sendPasswordResetEmail
+} from "@/lib/password-reset";
+import {
   buildLoginThrottleKey,
   clearFailedLogin,
   isLoginBlocked,
   recordFailedLogin
 } from "@/lib/login-rate-limit";
 import { hashPassword } from "@/lib/password";
-import { loginSchema, registerSchema } from "@/lib/validations";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema
+} from "@/lib/validations";
 
 function isRedirectError(error: unknown) {
   return (
@@ -208,4 +218,132 @@ export async function logout() {
   await signOut({
     redirectTo: "/login"
   });
+}
+
+export async function requestPasswordReset(formData: FormData) {
+  const startedAt = Date.now();
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+
+  try {
+    const payload = forgotPasswordSchema.parse({
+      email: formData.get("email")
+    });
+    const email = payload.email.toLowerCase();
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user) {
+      const reset = await createPasswordResetToken(user.id);
+      await sendPasswordResetEmail({
+        email,
+        resetUrl: reset.url
+      });
+
+      await logAuditEvent({
+        userId: user.id,
+        action: "auth.password_reset_requested",
+        entityType: "user",
+        entityId: user.id,
+        ip
+      });
+    }
+
+    logInfo("Password reset requested", {
+      matchedUser: Boolean(user),
+      ip,
+      ms: Date.now() - startedAt
+    });
+
+    redirect("/forgot-password?sent=1");
+  } catch (error) {
+    if (error instanceof ZodError) {
+      logWarn("Password reset request validation failed", {
+        ip,
+        ms: Date.now() - startedAt
+      });
+      redirect("/forgot-password?error=Please%20enter%20a%20valid%20email");
+    }
+
+    if (!isRedirectError(error)) {
+      logError("Password reset request failed", error, {
+        ip,
+        ms: Date.now() - startedAt
+      });
+    }
+    throw error;
+  }
+}
+
+export async function resetPassword(formData: FormData) {
+  const startedAt = Date.now();
+  const rawToken = String(formData.get("token") ?? "");
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+
+  try {
+    const payload = resetPasswordSchema.parse({
+      token: formData.get("token"),
+      password: formData.get("password")
+    });
+    const result = await resetPasswordWithToken(payload);
+
+    if (!result.ok) {
+      logWarn("Password reset token rejected", {
+        reason: result.reason,
+        ip,
+        ms: Date.now() - startedAt
+      });
+      redirect(`/reset-password?error=${encodeURIComponent(
+        result.reason === "expired"
+          ? "This reset link has expired. Please request a new one."
+          : "This reset link is invalid. Please request a new one."
+      )}`);
+    }
+
+    await logAuditEvent({
+      userId: result.userId,
+      action: "auth.password_reset_completed",
+      entityType: "user",
+      entityId: result.userId,
+      ip
+    });
+
+    logInfo("Password reset completed", {
+      userId: result.userId,
+      ip,
+      ms: Date.now() - startedAt
+    });
+
+    redirect("/login?success=Password%20updated.%20You%20can%20log%20in%20now.");
+  } catch (error) {
+    if (error instanceof ZodError) {
+      logWarn("Password reset validation failed", {
+        ip,
+        ms: Date.now() - startedAt
+      });
+      const url = new URLSearchParams({
+        error: "Please enter a new password with at least 10 characters"
+      });
+
+      if (rawToken) {
+        url.set("token", rawToken);
+      }
+
+      redirect(`/reset-password?${url.toString()}`);
+    }
+
+    if (!isRedirectError(error)) {
+      logError("Password reset failed", error, {
+        ip,
+        ms: Date.now() - startedAt
+      });
+    }
+    throw error;
+  }
 }

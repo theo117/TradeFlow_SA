@@ -213,6 +213,25 @@ psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260617_email_confirmation
 
 In production, missing `RESEND_API_KEY` or `EMAIL_FROM` now fails registration instead of silently logging a confirmation link.
 
+## Password Recovery Deployment
+
+Forgot-password uses the same `RESEND_API_KEY`, `EMAIL_FROM`, and `NEXT_PUBLIC_APP_URL` values as email confirmation.
+
+Apply the dedicated Neon migration before testing recovery:
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260618_password_recovery.sql
+```
+
+Recovery QA checklist:
+
+1. Open `/forgot-password`.
+2. Submit an existing account email and confirm the inbox receives a reset link.
+3. Submit an unknown email and confirm the page shows the same success message.
+4. Open `/reset-password?token=...`, set a new password, and confirm the old password no longer works.
+5. Confirm the reset link cannot be reused.
+6. Confirm short passwords keep the user on the reset page with a validation message.
+
 ## Logo Uploads
 
 Business logo uploads use Vercel Blob.

@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 import authConfig from "@/auth.config";
 
 const PROTECTED_PREFIX = "/dashboard";
-const AUTH_ROUTES = ["/login", "/register"];
+const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 const { auth } = NextAuth(authConfig);
 
@@ -29,5 +29,11 @@ export default auth((request) => {
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"]
+  matcher: [
+    "/dashboard/:path*",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password"
+  ]
 };

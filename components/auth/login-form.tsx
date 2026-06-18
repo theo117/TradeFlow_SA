@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 
 export function LoginForm({
   next,
-  initialError
+  initialError,
+  initialSuccess
 }: {
   next?: string;
   initialError?: string;
+  initialSuccess?: string;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(initialError ?? "");
@@ -93,10 +95,21 @@ export function LoginForm({
         {error ? (
           <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
         ) : null}
+        {!error && initialSuccess ? (
+          <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            {initialSuccess}
+          </p>
+        ) : null}
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? "Logging in..." : "Login"}
         </Button>
       </form>
+      <p className="text-sm text-slate-500">
+        Forgot your password?{" "}
+        <Link href="/forgot-password" className="font-medium text-brand-700">
+          Reset it
+        </Link>
+      </p>
       <p className="text-sm text-slate-500">
         New to TradeFlow SA?{" "}
         <Link href="/register" className="font-medium text-brand-700">

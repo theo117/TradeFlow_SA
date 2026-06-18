@@ -11,6 +11,15 @@ export const registerSchema = z.object({
   password: z.string().min(10)
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(10)
+});
+
 export const customerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email().optional().or(z.literal("")),
