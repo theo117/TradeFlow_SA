@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { businesses } from "@/lib/db/schema";
+import { businesses, users } from "@/lib/db/schema";
 import type { Business } from "@/lib/types";
 import { logError, logWarn } from "@/lib/observability";
 
@@ -18,6 +18,17 @@ export async function requireUser() {
 
   if (!user?.id) {
     redirect("/login");
+  }
+
+  const [storedUser] = await db
+    .select({ emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  if (!storedUser?.emailVerifiedAt) {
+    logWarn("Unverified user session rejected", { userId: user.id });
+    redirect("/login?code=email_not_verified");
   }
 
   return user;
