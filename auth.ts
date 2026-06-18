@@ -13,6 +13,22 @@ class EmailNotVerifiedError extends CredentialsSignin {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async signIn({ user }) {
+      if (!user.email) {
+        return false;
+      }
+
+      const [storedUser] = await db
+        .select({ emailVerifiedAt: users.emailVerifiedAt })
+        .from(users)
+        .where(eq(users.email, user.email.toLowerCase()))
+        .limit(1);
+
+      return Boolean(storedUser?.emailVerifiedAt);
+    }
+  },
   providers: [
     Credentials({
       credentials: {

@@ -5,7 +5,8 @@ add column if not exists email_verified_at timestamptz;
 
 update public.users
 set email_verified_at = created_at
-where email_verified_at is null;
+where email_verified_at is null
+  and created_at < timestamptz '2026-06-17 00:00:00+00';
 
 create table if not exists public.email_verification_tokens (
   id uuid primary key default gen_random_uuid(),
