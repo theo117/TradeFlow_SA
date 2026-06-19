@@ -3,8 +3,6 @@ import NextAuth from "next-auth";
 import authConfig from "@/auth.config";
 
 const PROTECTED_PREFIX = "/dashboard";
-const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
-
 const { auth } = NextAuth(authConfig);
 
 export default auth((request) => {
@@ -18,22 +16,9 @@ export default auth((request) => {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (AUTH_ROUTES.includes(pathname) && isAuthenticated) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
-    redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
-  }
-
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/login",
-    "/register",
-    "/forgot-password",
-    "/reset-password"
-  ]
+  matcher: ["/dashboard/:path*"]
 };

@@ -26,7 +26,14 @@ export async function requireUser() {
     .where(eq(users.id, user.id))
     .limit(1);
 
-  if (!storedUser?.emailVerifiedAt) {
+  if (!storedUser) {
+    logWarn("Orphaned user session rejected", { userId: user.id });
+    redirect(
+      "/login?error=Your%20session%20is%20no%20longer%20valid.%20Please%20log%20in%20again."
+    );
+  }
+
+  if (!storedUser.emailVerifiedAt) {
     logWarn("Unverified user session rejected", { userId: user.id });
     redirect("/login?code=email_not_verified");
   }
