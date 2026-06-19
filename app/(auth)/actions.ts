@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { eq } from "drizzle-orm";
@@ -42,6 +42,20 @@ function isRedirectError(error: unknown) {
     "digest" in error &&
     String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
   );
+}
+
+async function clearAuthSessionCookies() {
+  const cookieStore = await cookies();
+  const sessionCookiePrefixes = [
+    "authjs.session-token",
+    "__Secure-authjs.session-token"
+  ];
+
+  for (const cookie of cookieStore.getAll()) {
+    if (sessionCookiePrefixes.some((prefix) => cookie.name.startsWith(prefix))) {
+      cookieStore.delete(cookie.name);
+    }
+  }
 }
 
 export async function login(formData: FormData) {
@@ -132,6 +146,7 @@ export async function login(formData: FormData) {
 export async function register(formData: FormData) {
   const startedAt = Date.now();
   try {
+    await clearAuthSessionCookies();
     const headerStore = await headers();
     const forwardedFor = headerStore.get("x-forwarded-for");
     const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
@@ -214,9 +229,6 @@ export async function register(formData: FormData) {
       userId,
       ms: Date.now() - startedAt
     });
-
-    // Registration must never inherit a session from an earlier test account.
-    await signOut({ redirect: false });
 
     const verifyParams = new URLSearchParams({
       email
