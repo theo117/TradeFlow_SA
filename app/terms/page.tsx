@@ -44,7 +44,7 @@ export default function TermsPage() {
 
       <LegalSection title="5. Paid plans">
         <p>
-          If billing is enabled, subscription fees, billing intervals, cancellations, and refunds are handled according to the refund and cancellation policy.
+          If billing is enabled, subscription fees, billing intervals, and cancellation terms will be shown before purchase.
         </p>
       </LegalSection>
 

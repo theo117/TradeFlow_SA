@@ -246,7 +246,6 @@ Public legal pages are available at:
 
 - `/terms`
 - `/privacy`
-- `/refund-policy`
 - `/contact`
 
 The shared business details live in [lib/legal.ts](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/lib/legal.ts). Before broad paid launch, replace the placeholder support/privacy emails and add the registered legal entity details, registration number, and customer support contact details. These pages are starter documents and should be reviewed for your final business structure and POPIA obligations.
