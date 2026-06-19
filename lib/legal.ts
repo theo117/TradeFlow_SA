@@ -10,6 +10,5 @@ export const legalBusiness = {
 export const legalLinks = [
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
-  { href: "/refund-policy", label: "Refunds" },
   { href: "/contact", label: "Contact" }
 ];
