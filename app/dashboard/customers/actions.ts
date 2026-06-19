@@ -44,17 +44,28 @@ export async function createCustomer(formData: FormData) {
     });
 
     revalidatePath("/dashboard/customers");
+    return {
+      error: false,
+      message: "Customer created"
+    };
   } catch (error) {
     if (error instanceof ZodError) {
-      redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
+      return {
+        error: true,
+        message: error.issues[0]?.message ?? "Invalid form values"
+      };
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.message)}`);
+      return {
+        error: true,
+        message: error.message
+      };
     }
-    throw error;
+    return {
+      error: true,
+      message: "Unable to create customer"
+    };
   }
-
-  redirect("/dashboard/customers?success=Customer%20created");
 }
 
 export async function updateCustomer(customerId: string, formData: FormData) {
