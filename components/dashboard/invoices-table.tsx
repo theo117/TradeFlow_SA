@@ -3,8 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { ArrowUpRight, CheckCircle2, Download, ReceiptText } from "lucide-react";
-import { updateInvoiceStatus } from "@/app/dashboard/invoices/actions";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  Download,
+  ReceiptText,
+  Trash2
+} from "lucide-react";
+import {
+  deleteInvoice,
+  updateInvoiceStatus
+} from "@/app/dashboard/invoices/actions";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { ListToolbar } from "@/components/dashboard/list-toolbar";
 import { SortHeader } from "@/components/dashboard/sort-header";
@@ -62,6 +72,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
     "all" | "draft" | "sent" | "paid" | "overdue"
   >("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
   const [toast, setToast] = useState<InlineToastState>(null);
 
   const filteredRows = useMemo(
@@ -163,6 +174,35 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
     }
 
     setPendingId(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    const snapshot = rows;
+    const invoiceId = deleteTarget.id;
+    setPendingId(invoiceId);
+    setRows((current) => current.filter((invoice) => invoice.id !== invoiceId));
+
+    try {
+      const result = await deleteInvoice(invoiceId);
+
+      if (result.error) {
+        setRows(snapshot);
+        setToast({ kind: "error", message: result.message });
+      } else {
+        setToast({ kind: "success", message: result.message });
+        router.refresh();
+      }
+    } catch {
+      setRows(snapshot);
+      setToast({ kind: "error", message: "Unable to delete invoice" });
+    }
+
+    setPendingId(null);
+    setDeleteTarget(null);
   }
 
   return (
@@ -293,6 +333,16 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                       >
                         Download PDF
                       </Link>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={() => setDeleteTarget(invoice)}
+                        disabled={pendingId !== null}
+                        title={`Delete ${invoice.invoice_number}`}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -371,6 +421,16 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                   <Download className="mr-2 h-4 w-4" />
                   PDF
                 </Link>
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => setDeleteTarget(invoice)}
+                  disabled={pendingId !== null}
+                  title={`Delete ${invoice.invoice_number}`}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
               </div>
             </div>
           ))}
@@ -385,6 +445,16 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
           onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
         />
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.invoice_number ?? "invoice"}?`}
+        description="This permanently removes the invoice, its line items, and active public links. The source quote will remain available."
+        confirmLabel="Delete invoice"
+        pending={Boolean(deleteTarget && pendingId === deleteTarget.id)}
+        onCancel={() => pendingId === null && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
 
       <InlineToast toast={toast} onClear={() => setToast(null)} />
     </>

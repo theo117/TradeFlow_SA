@@ -4,6 +4,7 @@ import { WorkflowHeader } from "@/components/dashboard/workflow-header";
 import { Field } from "@/components/forms/field";
 import { FormSection } from "@/components/forms/form-section";
 import { PendingButton } from "@/components/forms/pending-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { requireBusiness } from "@/lib/auth";
@@ -47,7 +48,7 @@ export default async function SettingsPage({
               Upload your company logo here. It will be used on invoice PDFs, quote PDFs, and shared quote or invoice views.
             </p>
             {business.logo_url ? (
-              <div className="mt-4">
+              <div className="mt-4 space-y-3">
                 <p className="text-sm text-slate-500">Current logo</p>
                 <Image
                   src={business.logo_url}
@@ -60,6 +61,39 @@ export default async function SettingsPage({
             ) : (
               <p className="mt-3 text-sm text-slate-500">No logo uploaded yet.</p>
             )}
+            <div className="mt-4 max-w-md space-y-3">
+              <Field
+                htmlFor="logo"
+                label={business.logo_url ? "Choose replacement logo" : "Choose logo"}
+              >
+                <Input
+                  id="logo"
+                  name="logo"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  name="logoAction"
+                  value="replace"
+                  variant="secondary"
+                >
+                  {business.logo_url ? "Replace logo" : "Upload logo"}
+                </Button>
+                {business.logo_url ? (
+                  <Button
+                    type="submit"
+                    name="logoAction"
+                    value="remove"
+                    variant="danger"
+                  >
+                    Remove logo
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -76,9 +110,6 @@ export default async function SettingsPage({
             </Field>
             <Field htmlFor="phone" label="Business phone">
               <Input id="phone" name="phone" defaultValue={business.phone ?? ""} />
-            </Field>
-            <Field htmlFor="logo" label="Company logo">
-              <Input id="logo" name="logo" type="file" accept="image/png,image/jpeg" />
             </Field>
           </div>
           <Field htmlFor="address" label="Business address">

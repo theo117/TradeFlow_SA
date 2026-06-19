@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { businesses } from "@/lib/db/schema";
 import { requireBusiness } from "@/lib/auth";
+import { logWarn } from "@/lib/observability";
 
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg"]);
@@ -39,14 +40,23 @@ export async function updateBusinessProfile(formData: FormData) {
     formData.get("paymentInstructions") ?? ""
   ).trim();
   const logo = formData.get("logo");
+  const logoAction = String(formData.get("logoAction") ?? "keep");
 
   if (!name) {
     redirect("/dashboard/settings?error=Business%20name%20is%20required");
   }
 
-  let logoUrl = business.logo_url;
+  const previousLogoUrl = business.logo_url;
+  let logoUrl = logoAction === "remove" ? null : previousLogoUrl;
 
-  if (logo instanceof File && logo.size > 0) {
+  if (
+    logoAction === "replace" &&
+    !(logo instanceof File && logo.size > 0)
+  ) {
+    redirect("/dashboard/settings?error=Choose%20a%20PNG%20or%20JPEG%20logo%20first");
+  }
+
+  if (logoAction !== "remove" && logo instanceof File && logo.size > 0) {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       redirect("/dashboard/settings?error=Blob%20storage%20is%20not%20configured");
     }
@@ -91,6 +101,17 @@ export async function updateBusinessProfile(formData: FormData) {
       logoUrl
     })
     .where(eq(businesses.id, business.id));
+
+  if (previousLogoUrl && previousLogoUrl !== logoUrl) {
+    try {
+      await del(previousLogoUrl);
+    } catch (error) {
+      logWarn("Old business logo could not be deleted", {
+        businessId: business.id,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 
   revalidatePath("/dashboard", "layout");
   revalidatePath("/dashboard/settings");
