@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  deleteInvoice,
   recordInvoiceReminder,
   revokeInvoicePublicLinks,
   updateInvoiceStatus
 } from "@/app/dashboard/invoices/actions";
+import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { EmailShareButton } from "@/components/dashboard/email-share-button";
 import { InlineToast, type InlineToastState } from "@/components/feedback/inline-toast";
 import { WhatsAppShareButton } from "@/components/dashboard/whatsapp-share-button";
@@ -33,8 +35,9 @@ export function InvoiceDetailActions({
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState(status);
   const [pending, setPending] = useState<
-    "sent" | "paid" | "email" | "whatsapp" | "revoke" | null
+    "sent" | "paid" | "email" | "whatsapp" | "revoke" | "delete" | null
   >(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [toast, setToast] = useState<InlineToastState>(null);
 
   async function handleStatus(nextStatus: "sent" | "paid") {
@@ -98,6 +101,21 @@ export function InvoiceDetailActions({
     setPending(null);
   }
 
+  async function handleDelete() {
+    setPending("delete");
+    const result = await deleteInvoice(invoiceId);
+
+    if (result.error) {
+      setToast({ kind: "error", message: result.message });
+      setPending(null);
+      setConfirmDeleteOpen(false);
+      return;
+    }
+
+    router.push("/dashboard/invoices?success=Invoice%20deleted");
+    router.refresh();
+  }
+
   const primaryEmailHref =
     currentStatus === "draft" ? emailHref : reminderEmailHref ?? emailHref;
   const primaryWhatsappHref =
@@ -138,6 +156,14 @@ export function InvoiceDetailActions({
         </Button>
         <Button
           type="button"
+          variant="danger"
+          disabled={pending !== null}
+          onClick={() => setConfirmDeleteOpen(true)}
+        >
+          Delete invoice
+        </Button>
+        <Button
+          type="button"
           variant="secondary"
           disabled={pending !== null || !primaryEmailHref}
           onClick={() => handleReminder("email", primaryEmailHref)}
@@ -173,6 +199,16 @@ export function InvoiceDetailActions({
           Back to invoices
         </Link>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete this invoice?"
+        description="This permanently removes the invoice, its line items, and active public links. The source quote will remain available."
+        confirmLabel="Delete invoice"
+        pending={pending === "delete"}
+        onCancel={() => pending !== "delete" && setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
+      />
 
       <InlineToast toast={toast} onClear={() => setToast(null)} />
     </>

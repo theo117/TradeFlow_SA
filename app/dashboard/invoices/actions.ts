@@ -350,3 +350,54 @@ export async function revokeInvoicePublicLinks(invoiceId: string) {
     };
   }
 }
+
+export async function deleteInvoice(invoiceId: string) {
+  const business = await requirePaidBusiness();
+
+  try {
+    const [deletedInvoice] = await db
+      .delete(invoices)
+      .where(
+        and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId))
+      )
+      .returning({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        customerId: invoices.customerId,
+        quoteId: invoices.quoteId
+      });
+
+    if (!deletedInvoice) {
+      return {
+        error: true,
+        message: "Invoice not found"
+      };
+    }
+
+    await logActivityEvent({
+      businessId: business.id,
+      customerId: deletedInvoice.customerId,
+      quoteId: deletedInvoice.quoteId,
+      type: "invoice.deleted",
+      description: `Invoice ${deletedInvoice.invoiceNumber} was deleted.`
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/invoices");
+    revalidatePath("/dashboard/quotes");
+
+    if (deletedInvoice.quoteId) {
+      revalidatePath(`/dashboard/quotes/${deletedInvoice.quoteId}`);
+    }
+
+    return {
+      error: false,
+      message: "Invoice deleted"
+    };
+  } catch (error) {
+    return {
+      error: true,
+      message: error instanceof Error ? error.message : "Unable to delete invoice"
+    };
+  }
+}
