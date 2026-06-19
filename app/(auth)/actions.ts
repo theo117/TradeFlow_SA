@@ -176,10 +176,31 @@ export async function register(formData: FormData) {
     });
 
     const verification = await createEmailVerificationToken(userId);
-    await sendEmailVerification({
-      email,
-      verificationUrl: verification.url
-    });
+    let verificationEmailSent = true;
+
+    try {
+      await sendEmailVerification({
+        email,
+        verificationUrl: verification.url
+      });
+    } catch (error) {
+      verificationEmailSent = false;
+      logError("Email verification send failed during registration", error, {
+        userId,
+        ip,
+        ms: Date.now() - startedAt
+      });
+      await logAuditEvent({
+        action: "auth.email_verification_send_failed",
+        entityType: "user",
+        entityId: userId,
+        userId,
+        ip,
+        metadata: {
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      });
+    }
 
     await logAuditEvent({
       action: "auth.register_pending_email_verification",
@@ -194,7 +215,23 @@ export async function register(formData: FormData) {
       ms: Date.now() - startedAt
     });
 
-    redirect(`/verify-email?sent=1&email=${encodeURIComponent(email)}`);
+    // Registration must never inherit a session from an earlier test account.
+    await signOut({ redirect: false });
+
+    const verifyParams = new URLSearchParams({
+      email
+    });
+
+    if (verificationEmailSent) {
+      verifyParams.set("sent", "1");
+    } else {
+      verifyParams.set(
+        "error",
+        "We created your account, but could not send the confirmation email. Please try resending it in a minute or contact support."
+      );
+    }
+
+    redirect(`/verify-email?${verifyParams.toString()}`);
   } catch (error) {
     if (error instanceof AuthError) {
       logWarn("Registration auto-login failed", {
@@ -222,6 +259,89 @@ export async function logout() {
   await signOut({
     redirectTo: "/login"
   });
+}
+
+export async function resendEmailVerification(formData: FormData) {
+  const startedAt = Date.now();
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+
+  try {
+    const payload = forgotPasswordSchema.parse({
+      email: formData.get("email")
+    });
+    const email = payload.email.toLowerCase();
+    const [user] = await db
+      .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user && !user.emailVerifiedAt) {
+      const verification = await createEmailVerificationToken(user.id);
+      try {
+        await sendEmailVerification({
+          email,
+          verificationUrl: verification.url
+        });
+      } catch (error) {
+        logError("Email verification resend provider failed", error, {
+          userId: user.id,
+          ip,
+          ms: Date.now() - startedAt
+        });
+        await logAuditEvent({
+          userId: user.id,
+          action: "auth.email_verification_resend_failed",
+          entityType: "user",
+          entityId: user.id,
+          ip,
+          metadata: {
+            reason: error instanceof Error ? error.message : String(error)
+          }
+        });
+        redirect(
+          `/verify-email?email=${encodeURIComponent(email)}&error=${encodeURIComponent(
+            "The email provider rejected the send request. Please check the email service configuration and try again."
+          )}`
+        );
+      }
+
+      await logAuditEvent({
+        userId: user.id,
+        action: "auth.email_verification_resent",
+        entityType: "user",
+        entityId: user.id,
+        ip
+      });
+    }
+
+    logInfo("Email verification resend requested", {
+      matchedUser: Boolean(user),
+      alreadyVerified: Boolean(user?.emailVerifiedAt),
+      ip,
+      ms: Date.now() - startedAt
+    });
+
+    redirect(`/verify-email?sent=1&email=${encodeURIComponent(email)}`);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      logWarn("Email verification resend validation failed", {
+        ip,
+        ms: Date.now() - startedAt
+      });
+      redirect("/verify-email?error=Please%20enter%20a%20valid%20email");
+    }
+
+    if (!isRedirectError(error)) {
+      logError("Email verification resend failed", error, {
+        ip,
+        ms: Date.now() - startedAt
+      });
+    }
+    throw error;
+  }
 }
 
 export async function requestPasswordReset(formData: FormData) {
