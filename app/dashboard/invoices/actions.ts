@@ -21,6 +21,7 @@ import { revokePublicShareTokens } from "@/lib/public-access";
 import { convertQuoteToInvoiceSchema, invoiceStatusSchema } from "@/lib/validations";
 import { sendInvoiceWhatsappMessage } from "@/lib/whatsapp";
 import { buildInvoiceItemsFromQuoteItems } from "@/lib/workflows";
+import { isNextRedirectError } from "@/lib/navigation";
 
 export async function convertQuoteToInvoice(formData: FormData) {
   const redirectTo = String(
@@ -125,6 +126,9 @@ export async function convertQuoteToInvoice(formData: FormData) {
     revalidatePath("/dashboard/invoices");
     redirect(`/dashboard/invoices/${invoice.id}?success=Invoice%20created`);
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(
         `${redirectTo}?error=${encodeURIComponent(

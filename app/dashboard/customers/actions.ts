@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { customerSchema } from "@/lib/validations";
 import { normalizeWhatsappPhone } from "@/lib/whatsapp";
+import { isNextRedirectError } from "@/lib/navigation";
 
 export async function createCustomer(formData: FormData) {
   try {
@@ -46,6 +47,9 @@ export async function createCustomer(formData: FormData) {
     revalidatePath("/dashboard/customers");
     redirect("/dashboard/customers?success=Customer%20created");
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(`/dashboard/customers/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
@@ -100,6 +104,9 @@ export async function updateCustomer(customerId: string, formData: FormData) {
     revalidatePath("/dashboard/customers");
     redirect("/dashboard/customers?success=Customer%20updated");
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }

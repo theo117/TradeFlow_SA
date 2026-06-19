@@ -14,6 +14,7 @@ import {
   recurringInvoiceTemplates
 } from "@/lib/db/schema";
 import { recurringInvoiceTemplateSchema } from "@/lib/validations";
+import { isNextRedirectError } from "@/lib/navigation";
 
 function addDays(value: string, days: number) {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -89,6 +90,9 @@ export async function createRecurringInvoiceTemplate(formData: FormData) {
     revalidatePath("/dashboard/recurring");
     redirect("/dashboard/recurring?success=Recurring%20invoice%20created");
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(
         `/dashboard/recurring?error=${encodeURIComponent(

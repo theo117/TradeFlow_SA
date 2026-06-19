@@ -8,6 +8,7 @@ import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { services } from "@/lib/db/schema";
 import { serviceSchema } from "@/lib/validations";
+import { isNextRedirectError } from "@/lib/navigation";
 
 export async function createService(formData: FormData) {
   try {
@@ -28,6 +29,9 @@ export async function createService(formData: FormData) {
     revalidatePath("/dashboard/services");
     redirect("/dashboard/services?success=Service%20created");
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(`/dashboard/services/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
@@ -64,6 +68,9 @@ export async function updateService(serviceId: string, formData: FormData) {
     revalidatePath("/dashboard/services");
     redirect("/dashboard/services?success=Service%20updated");
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }

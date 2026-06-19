@@ -12,6 +12,7 @@ import { revokePublicShareTokens } from "@/lib/public-access";
 import { quoteSchema } from "@/lib/validations";
 import { sendQuoteWhatsappMessage } from "@/lib/whatsapp";
 import { calculateQuoteTotal } from "@/lib/workflows";
+import { isNextRedirectError } from "@/lib/navigation";
 
 export async function createQuote(formData: FormData) {
   try {
@@ -91,6 +92,9 @@ export async function createQuote(formData: FormData) {
     revalidatePath("/dashboard/quotes");
     redirect(`/dashboard/quotes/${quote.id}?success=Quote%20created`);
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof ZodError) {
       redirect(`/dashboard/quotes/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
