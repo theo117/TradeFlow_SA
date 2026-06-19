@@ -5,6 +5,10 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+function isInternalNavigationError(message: string | null) {
+  return Boolean(message?.toUpperCase().includes("NEXT_REDIRECT"));
+}
+
 export function QueryToast() {
   const params = useSearchParams();
   const pathname = usePathname();
@@ -15,12 +19,24 @@ export function QueryToast() {
     const success = params.get("success");
     const error = params.get("error");
 
-    if (error) return { kind: "error" as const, message: error };
+    if (error && !isInternalNavigationError(error)) {
+      return { kind: "error" as const, message: error };
+    }
     if (success) return { kind: "success" as const, message: success };
     return null;
   }, [params]);
 
   useEffect(() => {
+    if (isInternalNavigationError(params.get("error"))) {
+      const next = new URLSearchParams(params.toString());
+      next.delete("error");
+      router.replace(next.toString() ? `${pathname}?${next}` : pathname, {
+        scroll: false
+      });
+      setVisible(false);
+      return;
+    }
+
     if (!toast) {
       setVisible(false);
       return;
