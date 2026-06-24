@@ -38,6 +38,10 @@ export function LegalPage({
         <article className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           {children}
         </article>
+
+        <footer className="py-6 text-center text-xs uppercase tracking-[0.24em] text-slate-400">
+          pwoered by teodor dev tech
+        </footer>
       </div>
     </main>
   );

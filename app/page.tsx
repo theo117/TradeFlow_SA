@@ -48,7 +48,12 @@ export default function HomePage() {
         </section>
 
         <footer className="flex flex-col gap-3 border-t border-slate-200 py-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 TradeFlow SA</p>
+          <div className="space-y-1">
+            <p>© 2026 TradeFlow SA</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+              pwoered by teodor dev tech
+            </p>
+          </div>
           <nav className="flex flex-wrap gap-3">
             {legalLinks.map((link) => (
               <Link key={link.href} href={link.href} className="hover:text-brand-700">

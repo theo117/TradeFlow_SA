@@ -36,6 +36,9 @@ export function DashboardShell({
           <main className="flex-1 px-4 pb-6 pt-4 sm:px-6 lg:px-8 lg:pb-8">
             {children}
           </main>
+          <footer className="px-4 pb-6 text-center text-xs uppercase tracking-[0.24em] text-slate-400 sm:px-6 lg:px-8">
+            pwoered by teodor dev tech
+          </footer>
         </div>
       </div>
     </div>

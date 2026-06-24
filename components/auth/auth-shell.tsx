@@ -40,6 +40,9 @@ export function AuthShell({
                 </Link>
               ))}
             </nav>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+              pwoered by teodor dev tech
+            </p>
           </div>
         </Card>
       </div>
