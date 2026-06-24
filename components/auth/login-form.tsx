@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,12 @@ export function LoginForm({
 
   return (
     <>
+      <GoogleAuthButton redirectTo={next && next.startsWith("/") ? next : "/dashboard"} />
+      <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+        <span className="h-px flex-1 bg-slate-200" />
+        Or use email
+        <span className="h-px flex-1 bg-slate-200" />
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field htmlFor="email" label="Email">
           <Input

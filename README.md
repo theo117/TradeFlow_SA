@@ -361,7 +361,8 @@ Recommended next step before broad launch:
 ## Auth flow
 
 - Register creates a local `users` record, hashes the password, then creates a `businesses` row.
-- Login uses Auth.js credentials auth.
+- Google sign-up/login uses Auth.js Google OAuth. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and add `/api/auth/callback/google` as the Google OAuth callback path for your app URL.
+- Login uses Auth.js credentials auth or Google OAuth.
 - Middleware protects `/dashboard/**`.
 - Logout clears the session and redirects to `/login`.
 
