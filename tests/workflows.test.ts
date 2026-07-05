@@ -1,16 +1,21 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildInvoiceItemsFromQuoteItems,
   calculateQuoteTotal,
   normalizeRedirectTarget
 } from "../lib/workflows";
-import { hasBillingAccess } from "../lib/auth";
+import { hasBillingAccess } from "../lib/billing-access";
 import {
   addBillingMonth,
   createPayfastSignature,
   getSubscriptionStatusForPayfastPayment,
   parsePayfastPaymentStatus
 } from "../lib/payfast";
+import {
+  assertProductionEnv,
+  getDatabaseUrl
+} from "../lib/env";
+import { buildRateLimitKey } from "../lib/rate-limit";
 import type { Business } from "../lib/types";
 
 describe("auth redirect normalization", () => {
@@ -102,6 +107,50 @@ describe("payfast billing", () => {
   it("advances the billing period by one month", () => {
     expect(addBillingMonth(new Date("2026-06-17T12:00:00.000Z"))).toBe(
       "2026-07-17T12:00:00.000Z"
+    );
+  });
+});
+
+describe("production environment guardrails", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the local database fallback outside production", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DATABASE_URL", undefined);
+
+    expect(getDatabaseUrl()).toBe(
+      "postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa"
+    );
+  });
+
+  it("fails fast when production database config is missing", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", undefined);
+
+    expect(() => getDatabaseUrl()).toThrow("DATABASE_URL is required");
+  });
+
+  it("requires core production environment variables", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgres://example");
+    vi.stubEnv("AUTH_SECRET", "secret");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
+    vi.stubEnv("PUBLIC_LINK_SECRET", "public-secret");
+    vi.stubEnv("RESEND_API_KEY", "resend");
+    vi.stubEnv("EMAIL_FROM", "TradeFlow <noreply@example.com>");
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "blob");
+    vi.stubEnv("BILLING_ENFORCEMENT", "off");
+
+    expect(() => assertProductionEnv()).toThrow("NEXT_PUBLIC_APP_URL");
+  });
+});
+
+describe("generic rate limit keys", () => {
+  it("creates stable keys with unknown placeholders", () => {
+    expect(buildRateLimitKey("password-reset", ["1.2.3.4", null])).toBe(
+      "password-reset:1.2.3.4:unknown"
     );
   });
 });

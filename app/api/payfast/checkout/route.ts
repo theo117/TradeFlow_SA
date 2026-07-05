@@ -13,6 +13,7 @@ import {
 import { getBaseUrl } from "@/lib/utils";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function parsePlan(value: string | null): BillingPlan | null {
   if (value === "starter" || value === "pro") {

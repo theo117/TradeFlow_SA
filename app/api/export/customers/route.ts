@@ -4,6 +4,8 @@ import { csvResponse } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const business = await requirePaidBusiness();
   const rows = await db

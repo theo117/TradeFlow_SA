@@ -26,6 +26,7 @@ import {
   isLoginBlocked,
   recordFailedLogin
 } from "@/lib/login-rate-limit";
+import { buildRateLimitKey, consumeRateLimit } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/password";
 import {
   forgotPasswordSchema,
@@ -42,6 +43,40 @@ function isRedirectError(error: unknown) {
     "digest" in error &&
     String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
   );
+}
+
+function getClientIp(headerStore: Headers) {
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  return forwardedFor?.split(",")[0]?.trim() ?? null;
+}
+
+async function enforceAnonymousActionLimit({
+  action,
+  ip,
+  email,
+  redirectTo
+}: {
+  action: string;
+  ip: string | null;
+  email?: string | null;
+  redirectTo: string;
+}) {
+  const result = await consumeRateLimit({
+    namespace: `auth.${action}`,
+    key: buildRateLimitKey(action, [ip, email?.toLowerCase() ?? null]),
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    blockMs: 15 * 60 * 1000
+  });
+
+  if (result.blocked) {
+    logWarn("Anonymous auth action blocked by rate limit", {
+      action,
+      ip,
+      retryAfterSeconds: result.retryAfterSeconds
+    });
+    redirect(redirectTo);
+  }
 }
 
 async function clearAuthSessionCookies() {
@@ -62,8 +97,7 @@ export async function login(formData: FormData) {
   const startedAt = Date.now();
   const redirectTo = normalizeRedirectTarget(formData.get("next"));
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+  const ip = getClientIp(headerStore);
 
   try {
     const payload = loginSchema.parse({
@@ -157,6 +191,13 @@ export async function register(formData: FormData) {
     });
 
     const email = payload.email.toLowerCase();
+    await enforceAnonymousActionLimit({
+      action: "register",
+      ip,
+      email,
+      redirectTo:
+        "/register?error=Too%20many%20registration%20attempts.%20Please%20wait%2015%20minutes."
+    });
     const [existingUser] = await db
       .select({ id: users.id })
       .from(users)
@@ -276,14 +317,20 @@ export async function logout() {
 export async function resendEmailVerification(formData: FormData) {
   const startedAt = Date.now();
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+  const ip = getClientIp(headerStore);
 
   try {
     const payload = forgotPasswordSchema.parse({
       email: formData.get("email")
     });
     const email = payload.email.toLowerCase();
+    await enforceAnonymousActionLimit({
+      action: "verify-email-resend",
+      ip,
+      email,
+      redirectTo:
+        "/verify-email?error=Too%20many%20confirmation%20email%20requests.%20Please%20wait%2015%20minutes."
+    });
     const [user] = await db
       .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
       .from(users)
@@ -359,14 +406,19 @@ export async function resendEmailVerification(formData: FormData) {
 export async function requestPasswordReset(formData: FormData) {
   const startedAt = Date.now();
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+  const ip = getClientIp(headerStore);
 
   try {
     const payload = forgotPasswordSchema.parse({
       email: formData.get("email")
     });
     const email = payload.email.toLowerCase();
+    await enforceAnonymousActionLimit({
+      action: "password-reset-request",
+      ip,
+      email,
+      redirectTo: "/forgot-password?sent=1"
+    });
     const [user] = await db
       .select({ id: users.id })
       .from(users)
@@ -419,13 +471,19 @@ export async function resetPassword(formData: FormData) {
   const startedAt = Date.now();
   const rawToken = String(formData.get("token") ?? "");
   const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? null;
+  const ip = getClientIp(headerStore);
 
   try {
     const payload = resetPasswordSchema.parse({
       token: formData.get("token"),
       password: formData.get("password")
+    });
+    await enforceAnonymousActionLimit({
+      action: "password-reset-submit",
+      ip,
+      email: rawToken.slice(0, 12),
+      redirectTo:
+        "/reset-password?error=Too%20many%20reset%20attempts.%20Please%20request%20a%20new%20link."
     });
     const result = await resetPasswordWithToken(payload);
 

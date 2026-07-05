@@ -437,6 +437,34 @@ export const loginRateLimits = pgTable(
   })
 );
 
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    identifier: text("identifier").primaryKey(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull(),
+    blockedUntil: timestamp("blocked_until", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    blockedUntilIdx: index("rate_limits_blocked_until_idx").on(table.blockedUntil),
+    updatedAtIdx: index("rate_limits_updated_at_idx").on(table.updatedAt)
+  })
+);
+
 export const publicShareTokens = pgTable(
   "public_share_tokens",
   {
@@ -477,6 +505,56 @@ export const publicShareTokens = pgTable(
     quoteIdx: index("public_share_tokens_quote_id_idx").on(table.quoteId),
     invoiceIdx: index("public_share_tokens_invoice_id_idx").on(table.invoiceId),
     expiresAtIdx: index("public_share_tokens_expires_at_idx").on(table.expiresAt)
+  })
+);
+
+export const payfastItnEvents = pgTable(
+  "payfast_itn_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    paymentId: text("payment_id"),
+    pfPaymentId: text("pf_payment_id"),
+    businessId: uuid("business_id").references(() => businesses.id, {
+      onDelete: "set null"
+    }),
+    plan: text("plan"),
+    paymentStatus: text("payment_status"),
+    amountGross: numeric("amount_gross", {
+      precision: 12,
+      scale: 2,
+      mode: "number"
+    }),
+    signatureHash: text("signature_hash"),
+    validationStatus: text("validation_status").notNull(),
+    rawBody: text("raw_body").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "string"
+    })
+      .defaultNow()
+      .notNull(),
+    processedAt: timestamp("processed_at", {
+      withTimezone: true,
+      mode: "string"
+    }),
+    ignoredReason: text("ignored_reason")
+  },
+  (table) => ({
+    paymentIdx: index("payfast_itn_events_payment_id_idx").on(table.paymentId),
+    pfPaymentIdx: index("payfast_itn_events_pf_payment_id_idx").on(
+      table.pfPaymentId
+    ),
+    businessIdx: index("payfast_itn_events_business_id_idx").on(
+      table.businessId
+    ),
+    receivedAtIdx: index("payfast_itn_events_received_at_idx").on(
+      table.receivedAt
+    ),
+    processedPaymentStatusIdx: uniqueIndex(
+      "payfast_itn_events_unique_processed_status_idx"
+    )
+      .on(table.pfPaymentId, table.paymentStatus)
+      .where(sql`processed_at is not null and pf_payment_id is not null`)
   })
 );
 

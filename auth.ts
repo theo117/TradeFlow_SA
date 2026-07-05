@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { eq } from "drizzle-orm";
 import authConfig from "@/auth.config";
-import { getKeyFeatureTrialDays } from "@/lib/auth";
+import { getKeyFeatureTrialDays } from "@/lib/billing-access";
 import { loginSchema } from "@/lib/validations";
 import { db } from "@/lib/db";
 import { businesses, users } from "@/lib/db/schema";

@@ -10,10 +10,29 @@ import {
   logInfo,
   logWarn
 } from "@/lib/observability";
+import { buildRateLimitKey, consumeRateLimit } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
   const requestContext = getRequestLogContext(request);
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const limit = await consumeRateLimit({
+    namespace: "webhook.whatsapp.verify",
+    key: buildRateLimitKey("whatsapp-verify", [ip]),
+    limit: 60,
+    windowMs: 15 * 60 * 1000
+  });
+
+  if (limit.blocked) {
+    return new NextResponse("Too many requests", {
+      status: 429,
+      headers: {
+        "Retry-After": String(limit.retryAfterSeconds ?? 900)
+      }
+    });
+  }
   const searchParams = request.nextUrl.searchParams;
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
@@ -41,6 +60,25 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const startedAt = Date.now();
   const requestContext = getRequestLogContext(request);
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const limit = await consumeRateLimit({
+    namespace: "webhook.whatsapp.post",
+    key: buildRateLimitKey("whatsapp-post", [ip]),
+    limit: 120,
+    windowMs: 15 * 60 * 1000
+  });
+
+  if (limit.blocked) {
+    return NextResponse.json(
+      { ok: false },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(limit.retryAfterSeconds ?? 900)
+        }
+      }
+    );
+  }
   const body = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
 

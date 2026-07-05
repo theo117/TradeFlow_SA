@@ -1,0 +1,63 @@
+name: Production gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  nextjs:
+    name: Next.js checks
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      BILLING_ENFORCEMENT: "off"
+      KEY_FEATURE_TRIAL_LOCK: "on"
+      KEY_FEATURE_TRIAL_DAYS: "3"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tradeflow_sa
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/tradeflow_sa
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters-long
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      PUBLIC_LINK_SECRET: ci-public-link-secret-at-least-32-characters
+      RESEND_API_KEY: ci_resend_key
+      EMAIL_FROM: TradeFlow SA <ci@example.com>
+      BLOB_READ_WRITE_TOKEN: vercel_blob_ci_placeholder
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tradeflow_sa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply canonical schema
+        run: psql "$DATABASE_URL_UNPOOLED" -f supabase/schema.sql
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high

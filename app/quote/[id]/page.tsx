@@ -7,12 +7,11 @@ import { QuoteDocument } from "@/components/dashboard/quote-document";
 import { buttonVariants } from "@/components/ui/button";
 import {
   buildWhatsappQuoteUrl,
-  getQuotePdfUrl,
-  getQuotePublicUrl,
   getQuoteWhatsappRecipient
 } from "@/lib/quotes";
 import { validatePublicAccessToken } from "@/lib/public-access";
 import { getPublicQuoteById } from "@/lib/queries";
+import { getBaseUrl } from "@/lib/utils";
 
 export default async function PublicQuotePage({
   params,
@@ -39,8 +38,9 @@ export default async function PublicQuotePage({
   }
 
   const whatsappRecipient = getQuoteWhatsappRecipient(quote.customer);
-  const publicUrl = await getQuotePublicUrl(quote.id, quote.business.id);
-  const pdfUrl = await getQuotePdfUrl(quote.id, quote.business.id);
+  const encodedToken = encodeURIComponent(token ?? "");
+  const publicUrl = `${getBaseUrl()}/quote/${quote.id}?token=${encodedToken}`;
+  const pdfUrl = `/api/quotes/${quote.id}/pdf?token=${encodedToken}`;
   const whatsappHref = whatsappRecipient
     ? buildWhatsappQuoteUrl({
         phone: whatsappRecipient,

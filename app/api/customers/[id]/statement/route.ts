@@ -5,6 +5,8 @@ import { csvResponse } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { customers, invoices } from "@/lib/db/schema";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> }

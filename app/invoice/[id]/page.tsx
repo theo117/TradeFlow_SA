@@ -6,11 +6,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { validatePublicAccessToken } from "@/lib/public-access";
 import {
   buildWhatsappInvoiceUrl,
-  getInvoicePdfUrl,
-  getInvoicePublicUrl,
   getInvoiceWhatsappRecipient
 } from "@/lib/invoices";
 import { getPublicInvoiceById } from "@/lib/queries";
+import { getBaseUrl } from "@/lib/utils";
 
 export default async function PublicInvoicePage({
   params,
@@ -32,9 +31,10 @@ export default async function PublicInvoicePage({
     notFound();
   }
 
-  const pdfHref = await getInvoicePdfUrl(invoice.id, invoice.business.id);
+  const encodedToken = encodeURIComponent(token ?? "");
+  const pdfHref = `/api/invoices/${invoice.id}/pdf?token=${encodedToken}`;
   const whatsappRecipient = getInvoiceWhatsappRecipient(invoice.customer);
-  const publicUrl = await getInvoicePublicUrl(invoice.id, invoice.business.id);
+  const publicUrl = `${getBaseUrl()}/invoice/${invoice.id}?token=${encodedToken}`;
   const whatsappHref = whatsappRecipient
     ? buildWhatsappInvoiceUrl({
         phone: whatsappRecipient,

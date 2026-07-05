@@ -7,12 +7,15 @@ import { validatePublicAccessToken } from "@/lib/public-access";
 import { getPublicInvoiceById } from "@/lib/queries";
 import { generateInvoicePdf } from "@/lib/pdf/invoice";
 import { hasBillingAccess } from "@/lib/auth";
+import { buildRateLimitKey, consumeRateLimit } from "@/lib/rate-limit";
 import {
   getRequestLogContext,
   logError,
   logInfo,
   logWarn
 } from "@/lib/observability";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(
   request: Request,
@@ -29,6 +32,25 @@ export async function GET(
     const session = await auth();
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+
+    if (!session?.user?.id) {
+      const limit = await consumeRateLimit({
+        namespace: "public.invoice-pdf",
+        key: buildRateLimitKey("invoice-pdf", [ip, id]),
+        limit: 30,
+        windowMs: 15 * 60 * 1000
+      });
+
+      if (limit.blocked) {
+        return new NextResponse("Too many requests", {
+          status: 429,
+          headers: {
+            "Retry-After": String(limit.retryAfterSeconds ?? 900)
+          }
+        });
+      }
+    }
 
     const [ownedInvoice] = session?.user?.id
       ? await db

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { logAuditEvent } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { publicShareTokens } from "@/lib/db/schema";
@@ -77,13 +77,16 @@ export async function validatePublicAccessToken({
 
   const tokenHash = hashToken(token);
   const nowIso = new Date().toISOString();
+  const allowedTypes = type.endsWith("-pdf")
+    ? [type, type.replace("-pdf", "") as PublicDocumentType]
+    : [type];
   const [row] = await db
     .select({ id: publicShareTokens.id, businessId: publicShareTokens.businessId })
     .from(publicShareTokens)
     .where(
       and(
         eq(publicShareTokens.tokenHash, tokenHash),
-        eq(publicShareTokens.documentType, type),
+        inArray(publicShareTokens.documentType, allowedTypes),
         type.startsWith("quote")
           ? eq(publicShareTokens.quoteId, id)
           : eq(publicShareTokens.invoiceId, id),
