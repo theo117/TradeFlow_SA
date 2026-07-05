@@ -16,7 +16,7 @@ export default function HomePage() {
             <Link href="/login" className={buttonVariants({ variant: "secondary" })}>
               Login
             </Link>
-            <Link href="/register" className={buttonVariants({})}>
+            <Link href="/login" className={buttonVariants({})}>
               Get started
             </Link>
           </div>
@@ -34,9 +34,9 @@ export default function HomePage() {
               Manage customers, services, quotes, and invoices in one workspace for small service businesses.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/register" className={buttonVariants({})}>
+              <Link href="/login" className={buttonVariants({})}>
                 <span className="inline-flex items-center gap-2">
-                  Create workspace
+                  Open workspace
                   <ArrowRight className="h-4 w-4" />
                 </span>
               </Link>

@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
-import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,9 +43,7 @@ export function LoginForm({
 
       if (!result || result.error || !result.ok) {
         setError(
-          result?.code === "email_not_verified"
-            ? "Please confirm your email address before logging in."
-            : "The email or password does not match. Please check your password and try again."
+          "The email or password does not match. Please check your password and try again."
         );
         setPending(false);
         return;
@@ -74,19 +70,13 @@ export function LoginForm({
 
   return (
     <>
-      <GoogleAuthButton redirectTo={next && next.startsWith("/") ? next : "/dashboard"} />
-      <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-        <span className="h-px flex-1 bg-slate-200" />
-        Or use email
-        <span className="h-px flex-1 bg-slate-200" />
-      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field htmlFor="email" label="Email">
           <Input
             id="email"
             name="email"
             type="email"
-            placeholder="owner@business.co.za"
+            placeholder="owner@tradeflow.local"
             required
           />
         </Field>
@@ -111,18 +101,6 @@ export function LoginForm({
           {pending ? "Logging in..." : "Login"}
         </Button>
       </form>
-      <p className="text-sm text-slate-500">
-        Forgot your password?{" "}
-        <Link href="/forgot-password" className="font-medium text-brand-700">
-          Reset it
-        </Link>
-      </p>
-      <p className="text-sm text-slate-500">
-        New to TradeFlow SA?{" "}
-        <Link href="/register" className="font-medium text-brand-700">
-          Create an account
-        </Link>
-      </p>
     </>
   );
 }

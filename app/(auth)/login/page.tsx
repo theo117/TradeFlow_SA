@@ -7,10 +7,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; code?: string; next?: string; success?: string }>;
 }) {
   const params = await searchParams;
-  const error =
-    params.code === "email_not_verified"
-      ? "Please confirm your email address before logging in."
-      : params.error;
+  const error = params.error;
 
   return (
     <AuthShell
