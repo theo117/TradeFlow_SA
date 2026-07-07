@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { NextResponse } from "next/server";
 import { requirePaidBusiness } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { db } from "@/lib/db";
@@ -21,7 +21,7 @@ export async function GET(
     .limit(1);
 
   if (!customer) {
-    notFound();
+    return new NextResponse("Customer not found", { status: 404 });
   }
 
   const rows = await db
