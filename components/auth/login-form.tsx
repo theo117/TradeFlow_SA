@@ -57,7 +57,15 @@ export function LoginForm({
         return;
       }
 
-      window.location.assign(result.url ?? redirectTo);
+      const destination = result.url
+        ? new URL(result.url, window.location.origin)
+        : new URL(redirectTo, window.location.origin);
+
+      window.location.assign(
+        destination.origin === window.location.origin
+          ? destination.toString()
+          : redirectTo
+      );
     } catch (error) {
       setError(
         error instanceof Error && error.message === "timeout"
