@@ -1,0 +1,23 @@
+services:
+  tradeflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: tradeflow
+
+    restart: unless-stopped
+
+    env_file:
+      - .env.production
+
+    networks:
+      - proxy
+      - backend
+
+networks:
+  proxy:
+    external: true
+
+  backend:
+    external: true

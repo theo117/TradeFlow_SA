@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+
+Dockerfile
+compose.prod.yml
+
+README.md
+docs
+
+.vscode
+
+*.log
