@@ -1,5 +1,7 @@
 services:
   tradeflow:
+    image: tradeflow:latest
+
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,11 +17,25 @@ services:
       - proxy
       - backend
 
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps
+
+    working_dir: /app
+
+    volumes:
+      - .:/app
+
+    env_file:
+      - .env.production
+
+    command: >
+      sh -c "npm ci && npm run db:push"
+
+    networks:
+      - backend
 
 networks:
   proxy:
