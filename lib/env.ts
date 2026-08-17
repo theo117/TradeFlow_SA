@@ -26,41 +26,46 @@ export function assertProductionEnv() {
     return;
   }
 
-  const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
-const BLOB_ENABLED = process.env.BLOB_ENABLED === "true";
-
-if (EMAIL_ENABLED) {
-  const emailVars = [
-    "RESEND_API_KEY",
-    "EMAIL_FROM",
-  ];
-
-  const missingEmail = emailVars.filter(
+  // Required environment variables
+  const missing = REQUIRED_PRODUCTION_ENV.filter(
     (name) => !process.env[name]
   );
-
-  if (missingEmail.length > 0) {
-    throw new Error(
-      `Email is enabled but missing: ${missingEmail.join(", ")}`
-    );
-  }
-}
-
-if (BLOB_ENABLED && !process.env.BLOB_READ_WRITE_TOKEN) {
-  throw new Error(
-    "BLOB_READ_WRITE_TOKEN is required when blob storage is enabled."
-  );
-}
-
-  const missing = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
 
   if (missing.length > 0) {
     throw new Error(
       `Production environment is incomplete. Missing: ${missing.join(", ")}`
-
     );
   }
 
+  // Optional email validation
+  const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
+  const BLOB_ENABLED = process.env.BLOB_ENABLED === "true";
+
+  if (EMAIL_ENABLED) {
+    const emailVars = [
+      "RESEND_API_KEY",
+      "EMAIL_FROM",
+    ];
+
+    const missingEmail = emailVars.filter(
+      (name) => !process.env[name]
+    );
+
+    if (missingEmail.length > 0) {
+      throw new Error(
+        `Email is enabled but missing: ${missingEmail.join(", ")}`
+      );
+    }
+  }
+
+  // Optional blob validation
+  if (BLOB_ENABLED && !process.env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN is required when blob storage is enabled."
+    );
+  }
+
+  // Billing validation
   if (process.env.BILLING_ENFORCEMENT === "on") {
     const billingVars = [
       "PAYFAST_MERCHANT_ID",
@@ -71,7 +76,10 @@ if (BLOB_ENABLED && !process.env.BLOB_READ_WRITE_TOKEN) {
       "PAYFAST_PLAN_STARTER_AMOUNT",
       "PAYFAST_PLAN_PRO_AMOUNT"
     ];
-    const missingBilling = billingVars.filter((name) => !process.env[name]);
+
+    const missingBilling = billingVars.filter(
+      (name) => !process.env[name]
+    );
 
     if (missingBilling.length > 0) {
       throw new Error(
