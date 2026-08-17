@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: deps
+      target: builder
 
     working_dir: /app
 
