@@ -26,15 +26,7 @@ export function assertProductionEnv() {
     return;
   }
 
-  const missing = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Production environment is incomplete. Missing: ${missing.join(", ")}`
-
-    );
-  }
-const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
+  const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
 const BLOB_ENABLED = process.env.BLOB_ENABLED === "true";
 
 if (EMAIL_ENABLED) {
@@ -59,6 +51,16 @@ if (BLOB_ENABLED && !process.env.BLOB_READ_WRITE_TOKEN) {
     "BLOB_READ_WRITE_TOKEN is required when blob storage is enabled."
   );
 }
+
+  const missing = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Production environment is incomplete. Missing: ${missing.join(", ")}`
+
+    );
+  }
+
   if (process.env.BILLING_ENFORCEMENT === "on") {
     const billingVars = [
       "PAYFAST_MERCHANT_ID",
