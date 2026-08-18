@@ -1,0 +1,45 @@
+name: Deploy TradeFlow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+
+          script: |
+            cd ~/server-infrastructure/apps/TradeFlow_SA
+
+            git pull origin main
+
+            docker compose -f compose.prod.yml build
+
+            docker compose -f compose.prod.yml up -d
+
+            docker image prune -fscript: |
+  set -e
+
+  cd ~/server-infrastructure/apps/TradeFlow_SA
+
+  git pull origin main
+
+  docker compose -f compose.prod.yml build
+
+  docker compose -f compose.prod.yml up -d
+
+  sleep 10
+
+  docker ps
+
+  docker image prune -f
