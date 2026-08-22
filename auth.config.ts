@@ -1,7 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import { assertProductionEnv } from "@/lib/env";
 
-assertProductionEnv();
+
 
 const authConfig = {
   secret: process.env.AUTH_SECRET,
