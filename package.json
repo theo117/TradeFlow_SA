@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "drizzle-kit migrate --verbose",
     "db:push": "drizzle-kit push"
 
   },
