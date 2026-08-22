@@ -19,18 +19,15 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            set -e
+  set -e
 
-            cd ~/server-infrastructure/apps/TradeFlow_SA
+  cd ~/server-infrastructure/apps/TradeFlow_SA
 
-            git pull origin main
+  git fetch origin
+  git reset --hard origin/main
 
-            docker compose -f compose.prod.yml build
+  docker compose -f compose.prod.yml build
 
-            docker compose -f compose.prod.yml up -d
+  docker compose -f compose.prod.yml up -d
 
-            sleep 10
-
-            docker ps
-
-            docker image prune -f
+  docker image prune -f
