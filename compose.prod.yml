@@ -39,3 +39,4 @@ networks:
     external: true
 
   backend:
+    external: true
