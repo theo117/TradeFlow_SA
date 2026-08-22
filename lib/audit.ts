@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { auditEvents } from "@/lib/db/schema";
 import { logError } from "@/lib/observability";
-import { assertProductionEnv } from "@/lib/env";
 
-assertProductionEnv();
+
+
 
 export async function logAuditEvent({
   businessId,
@@ -22,6 +22,9 @@ export async function logAuditEvent({
   ip?: string | null;
   metadata?: Record<string, unknown> | null;
 }) {
+
+  assertProductionEnv();
+
   try {
     await db.insert(auditEvents).values({
       businessId: businessId ?? null,
