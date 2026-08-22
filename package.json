@@ -11,6 +11,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@vercel/blob": "^2.5.0",
@@ -41,4 +42,5 @@
     "typescript": "^5.8.2",
     "vitest": "^4.1.9"
   }
+
 }
