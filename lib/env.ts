@@ -11,6 +11,10 @@ function isProduction() {
   return process.env.NODE_ENV === "production";
 }
 
+function isBuildTime() {
+  return process.env.NEXT_PHASE === "phase-production-build";
+}
+
 export function assertRequiredEnv(name: string) {
   const value = process.env[name];
 
@@ -23,6 +27,12 @@ export function assertRequiredEnv(name: string) {
 
 export function assertProductionEnv() {
   if (!isProduction()) {
+    return;
+  }
+
+  // Skip validation during the Next.js build.
+  // Runtime validation still happens when the application starts.
+  if (isBuildTime()) {
     return;
   }
 
