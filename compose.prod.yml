@@ -32,7 +32,7 @@ services:
       - .env.production
 
     command: >
-      sh -c "npm ci && npm run db:push"
+      command: npm run db:migrate
 
     networks:
       - backend
