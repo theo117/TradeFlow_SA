@@ -11,6 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Verify deployment secrets
+        run: |
+          [ -n "${{ secrets.HOST }}" ] && echo "HOST is set" || (echo "HOST is EMPTY" && exit 1)
+          [ -n "${{ secrets.USERNAME }}" ] && echo "USERNAME is set" || (echo "USERNAME is EMPTY" && exit 1)
+          [ -n "${{ secrets.SSH_KEY }}" ] && echo "SSH_KEY is set" || (echo "SSH_KEY is EMPTY" && exit 1)
+          [ -n "${{ secrets.PORT }}" ] && echo "PORT is set" || (echo "PORT is EMPTY" && exit 1)
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -19,15 +26,14 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-  set -e
+            set -e
 
-  cd ~/server-infrastructure/apps/TradeFlow_SA
+            cd ~/server-infrastructure/apps/TradeFlow_SA
 
-  git fetch origin
-  git reset --hard origin/main
+            git fetch origin
+            git reset --hard origin/main
 
-  docker compose -f compose.prod.yml build
+            docker compose -f compose.prod.yml build
+            docker compose -f compose.prod.yml up -d
 
-  docker compose -f compose.prod.yml up -d
-
-  docker image prune -f
+            docker image prune -f
