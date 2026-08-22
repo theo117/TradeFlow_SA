@@ -18,24 +18,23 @@ services:
       - backend
 
   migrate:
-  build:
-    context: .
-    dockerfile: Dockerfile
-    target: migrate
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
 
-  env_file:
-    - .env.production
+    env_file:
+      - .env.production
 
-  command: npm run db:migrate
+    command: ["npm", "run", "db:migrate"]
 
-  restart: "no"
+    restart: "no"
 
-  networks:
-    - backend
+    networks:
+      - backend
 
 networks:
   proxy:
     external: true
 
   backend:
-    external: true
