@@ -10,8 +10,9 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate"
+
   },
   "dependencies": {
     "@vercel/blob": "^2.5.0",
