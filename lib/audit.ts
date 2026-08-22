@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { auditEvents } from "@/lib/db/schema";
 import { logError } from "@/lib/observability";
+import { assertProductionEnv } from "@/lib/env";
 
 
 
