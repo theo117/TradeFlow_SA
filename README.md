@@ -1,386 +1,152 @@
 # TradeFlow SA
 
-TradeFlow SA helps small South African service businesses manage customers, services, quotes, and invoices.
+Full-stack business management platform for service businesses, built with Next.js, Spring Boot, PostgreSQL, authentication, billing workflows, and webhooks.
 
-## Tech stack
+TradeFlow SA helps small service businesses manage customers, services, quotes, and invoices from a single application. The project combines a modern frontend with a Spring Boot API and PostgreSQL persistence to support real operational workflows such as billing, customer records, and invoice generation.
 
-- Spring Boot REST API backend in [backend](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/backend)
-- JWT authentication for API clients
-- Webhooks for Payfast and WhatsApp Cloud API
-- External API calls for payment verification
-- Background jobs for subscription/payment state checks
-- Clean controller -> service -> repository backend structure
-- Next.js App Router
+## Overview
+
+This application is designed for South African service businesses that need a simple way to:
+
+- manage customer records
+- track services and pricing
+- create and send quotes
+- generate invoices
+- handle billing and subscription workflows
+- manage business operations through a protected dashboard
+
+The system includes both a user-facing web app and a backend API, with authentication, business logic, and data persistence separated across application layers.
+
+## Features
+
+- Customer management and CRUD workflows
+- Service and pricing management
+- Quote creation and invoice generation
+- Public invoice pages and PDF exports
+- Authentication with credentials and OAuth support
+- Billing and subscription handling with Payfast integration
+- WhatsApp webhook integration for communication workflows
+- Dashboard metrics and operational views
+- Responsive application layout for business users
+
+## Tech Stack
+
+### Frontend
+- Next.js
+- React
 - TypeScript
 - Tailwind CSS
-- Auth.js credentials auth
-- PostgreSQL
-- Drizzle ORM
+- Auth.js
 
-## Setup
+### Backend
+- Java
+- Spring Boot
+- REST APIs
+- JWT authentication
+- Webhooks
+
+### Data and infrastructure
+- PostgreSQL
+- SQL schema management
+- Drizzle ORM
+- Docker
+- Vercel deployment
+- Linux server environment
+
+## Architecture
+
+The application is split between a Next.js frontend and a Spring Boot backend.
+
+- The frontend handles the dashboard, customer workflow, billing pages, and user-facing interfaces.
+- The backend exposes REST endpoints for authentication, customer management, billing verification, and webhook processing.
+- PostgreSQL stores core business data and the application schema.
+- Payment and messaging integrations use external APIs and webhook-driven processing.
+- The app separates business logic from request handling through controller, service, and repository patterns.
+
+## Screenshots
+
+Add screenshots of:
+
+- dashboard overview
+- customer management
+- quote and invoice workflow
+- billing and subscription page
+- login and authentication flow
+
+## Getting Started
 
 ### Frontend
 
-1. Copy `.env.example` to `.env.local`.
-2. Fill in:
-   - `DATABASE_URL`
-   - `DATABASE_URL_UNPOOLED`
-   - `NEXT_PUBLIC_APP_URL`
-   - `AUTH_SECRET`
-   - `RESEND_API_KEY`
-   - `EMAIL_FROM`
-   - `PAYFAST_MERCHANT_ID`
-   - `PAYFAST_MERCHANT_KEY`
-   - `PAYFAST_PASSPHRASE`
-   - `PAYFAST_PROCESS_URL`
-   - `PAYFAST_VALIDATE_URL`
-   - `PAYFAST_PLAN_STARTER_AMOUNT`
-   - `PAYFAST_PLAN_PRO_AMOUNT`
-   - `BILLING_ENFORCEMENT`
-   - `KEY_FEATURE_TRIAL_LOCK`
-   - `KEY_FEATURE_TRIAL_DAYS`
-   - `CONTINUATION_CONTACT_EMAIL`
-   - `CONTINUATION_CONTACT_WHATSAPP`
-   - `BLOB_READ_WRITE_TOKEN`
-3. Create a PostgreSQL database.
-4. Run the SQL in [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
-5. Install dependencies:
-
 ```bash
 npm install
-```
-
-6. Start the app:
-
-```bash
 npm run dev
 ```
 
-7. Open `http://localhost:3000`.
+Open `http://localhost:3000`.
 
-### Spring Boot API
-
-The rebranded backend lives in [backend](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/backend).
-
-Install Maven, then run:
+### Backend
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-The API starts on `http://localhost:8080` and uses the existing PostgreSQL schema from [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
+The API runs on `http://localhost:8080` by default.
 
-Important backend env vars:
+### Required environment variables
 
-- `DATABASE_URL`
-- `DATABASE_USERNAME`
-- `DATABASE_PASSWORD`
-- `JWT_SECRET`
-- `PAYFAST_PASSPHRASE`
-- `PAYFAST_VALIDATE_URL`
-- `PAYFAST_PLAN_STARTER_AMOUNT`
-- `PAYFAST_PLAN_PRO_AMOUNT`
-- `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
-- `WHATSAPP_APP_SECRET`
+Configure the required environment variables for the frontend and backend, including:
 
-Key API endpoints:
+- database connection values
+- authentication secrets
+- payment API values
+- email configuration
+- WhatsApp webhook configuration
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/customers`
-- `POST /api/customers`
-- `PUT /api/customers/{id}`
-- `DELETE /api/customers/{id}`
-- `POST /api/webhooks/payfast`
-- `GET /api/webhooks/whatsapp`
-- `POST /api/webhooks/whatsapp`
+## Testing
 
-## Local Postgres
+The project includes validation and quality checks for the application layer, including:
 
-The repo now includes [docker-compose.yml](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/docker-compose.yml) for local PostgreSQL.
+- linting
+- TypeScript checks
+- backend build validation
+- environment-based verification for deployed workflows
 
-If you install Docker Desktop, you can start the database with:
+Run the frontend checks as appropriate for the project setup:
 
 ```bash
-docker compose up -d
+npm run lint
+npm run typecheck
+npm test
 ```
 
-Then apply the schema:
+## Deployment
 
-```bash
-psql postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa -f supabase/schema.sql
-```
+The project is designed for deployment to modern hosting platforms:
 
-The default local app config in [`.env.local`](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/.env.local) already points at that database.
+- Vercel for the frontend
+- PostgreSQL for database persistence
+- Docker for local infrastructure workflows
+- Render or similar hosting for API deployment when needed
 
-## Database workflow
+The repository includes deployment guidance for the application environment, database configuration, and operational checks.
 
-- The app uses plain PostgreSQL.
-- The canonical schema file is [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql).
-- Drizzle schema lives in [lib/db/schema.ts](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/lib/db/schema.ts).
-- For Neon:
-  - `DATABASE_URL` should be the pooled connection string used by the live app.
-  - `DATABASE_URL_UNPOOLED` should be the direct connection string used for schema tools.
-- Optional Drizzle commands:
+## What I Learned
 
-```bash
-npm run db:generate
-npm run db:push
-```
+This project helped me practice:
 
-## Neon Production
+- full-stack application design
+- API-first backend workflows
+- authentication and authorization
+- database-backed business logic
+- external service integration
+- deployment configuration and environment management
+- documentation for a real-world application
 
-Neon is the recommended production database target for this repo.
+## Future Improvements
 
-1. Create a Neon project and database.
-2. Copy the pooled Neon connection string into `DATABASE_URL`.
-3. Copy the direct Neon connection string into `DATABASE_URL_UNPOOLED`.
-4. Apply the schema:
-
-```bash
-psql "$DATABASE_URL_UNPOOLED" -f supabase/schema.sql
-```
-
-5. Set the same env vars in your hosting platform.
-
-Neon recommends pooled connections for app traffic and direct connections for tooling such as migrations.
-Sources:
-- https://neon.com/docs/get-started-with-neon/connect-neon
-- https://neon.com/docs/guides/vercel/
-
-## Vercel Deployment
-
-This app is ready for standard Next.js deployment on Vercel.
-
-1. Push this repo to GitHub, GitLab, or Bitbucket.
-2. Import the repo into Vercel.
-3. In Vercel Project Settings, add these environment variables for `Production`:
-   - `DATABASE_URL`
-   - `DATABASE_URL_UNPOOLED`
-   - `AUTH_SECRET`
-   - `NEXT_PUBLIC_APP_URL`
-   - `RESEND_API_KEY`
-   - `EMAIL_FROM`
-   - `PAYFAST_MERCHANT_ID`
-   - `PAYFAST_MERCHANT_KEY`
-   - `PAYFAST_PASSPHRASE`
-   - `PAYFAST_PROCESS_URL`
-   - `PAYFAST_VALIDATE_URL`
-   - `PAYFAST_PLAN_STARTER_AMOUNT`
-   - `PAYFAST_PLAN_PRO_AMOUNT`
-   - `BILLING_ENFORCEMENT`
-   - `KEY_FEATURE_TRIAL_LOCK`
-   - `KEY_FEATURE_TRIAL_DAYS`
-   - `CONTINUATION_CONTACT_EMAIL`
-   - `CONTINUATION_CONTACT_WHATSAPP`
-   - `BLOB_READ_WRITE_TOKEN`
-4. Set `NEXT_PUBLIC_APP_URL` to your production domain, for example `https://your-app.vercel.app`.
-5. Deploy.
-
-Recommended preview setup:
-
-- Add preview values for:
-  - `DATABASE_URL`
-  - `DATABASE_URL_UNPOOLED`
-  - `AUTH_SECRET`
-- You can omit `NEXT_PUBLIC_APP_URL` in previews because the app falls back to `VERCEL_URL`.
-
-Useful Vercel workflow commands:
-
-```bash
-vercel
-vercel --prod
-vercel env pull .env.local
-```
-
-Vercel notes that environment variables apply to the next deployment after you add or change them, and `vercel env pull` can sync development values locally.
-Sources:
-- https://vercel.com/docs/environment-variables
-- https://vercel.com/docs/cli/env
-- https://vercel.com/docs/frameworks/nextjs
-
-## Email Confirmation Deployment
-
-Before charging customers, confirm the production email-confirmation path is live.
-
-1. Apply the dedicated Neon migration:
-
-```bash
-psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260617_email_confirmation.sql
-```
-
-2. Set production email env vars in Vercel:
-   - `RESEND_API_KEY`
-   - `EMAIL_FROM`
-   - `NEXT_PUBLIC_APP_URL`
-
-3. Redeploy production after the env vars are saved.
-4. Register a test account with an inbox you control.
-5. Confirm that the inbox receives the email, the `/verify-email?token=...` link marks the account verified, and login is blocked before confirmation but succeeds after confirmation.
-
-In production, missing `RESEND_API_KEY` or `EMAIL_FROM` now fails registration instead of silently logging a confirmation link.
-
-## Password Recovery Deployment
-
-Forgot-password uses the same `RESEND_API_KEY`, `EMAIL_FROM`, and `NEXT_PUBLIC_APP_URL` values as email confirmation.
-
-Apply the dedicated Neon migration before testing recovery:
-
-```bash
-psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260618_password_recovery.sql
-```
-
-Recovery QA checklist:
-
-1. Open `/forgot-password`.
-2. Submit an existing account email and confirm the inbox receives a reset link.
-3. Submit an unknown email and confirm the page shows the same success message.
-4. Open `/reset-password?token=...`, set a new password, and confirm the old password no longer works.
-5. Confirm the reset link cannot be reused.
-6. Confirm short passwords keep the user on the reset page with a validation message.
-
-## Legal and Commercial Pages
-
-Public legal pages are available at:
-
-- `/terms`
-- `/privacy`
-- `/contact`
-
-The shared business details live in [lib/legal.ts](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/lib/legal.ts). Before broad paid launch, replace the placeholder support/privacy emails and add the registered legal entity details, registration number, and customer support contact details. These pages are starter documents and should be reviewed for your final business structure and POPIA obligations.
-
-## Production QA
-
-Use [docs/production-qa.md](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/docs/production-qa.md) before charging outside pilots. It covers register, email confirmation, login, customer/service setup, quote creation, invoice conversion, sharing, logo upload, PDF download, password recovery, billing checkout, failed billing, and access-control sign-off.
-
-## Logo Uploads
-
-Business logo uploads use Vercel Blob.
-
-1. Create a Blob store in Vercel.
-2. Add `BLOB_READ_WRITE_TOKEN` to your environment variables.
-3. Open `/dashboard/settings` in the app.
-4. Upload a PNG or JPEG logo.
-
-The uploaded logo is stored on the business profile and rendered on invoice views and invoice PDFs.
-
-Source:
-- https://vercel.com/docs/storage/vercel-blob
-
-## Payfast Billing
-
-This repo includes a Payfast billing foundation:
-
-- Payfast checkout redirection from the billing page
-- ITN handling for payment validation and subscription sync
-- Billing-based access control for dashboard workflows
-
-Required Payfast setup:
-
-1. Create or use a Payfast merchant account.
-2. Set:
-   - `PAYFAST_MERCHANT_ID`
-   - `PAYFAST_MERCHANT_KEY`
-   - `PAYFAST_PASSPHRASE`
-   - `PAYFAST_PLAN_STARTER_AMOUNT`
-   - `PAYFAST_PLAN_PRO_AMOUNT`
-3. Add an ITN endpoint:
-
-```text
-https://your-domain.com/api/payfast/notify
-```
-
-4. Re-run [supabase/schema.sql](/c:/Users/theod/Documents/Java%202025/business/New%20folder/TradeFlow_SA/supabase/schema.sql) so the billing columns exist.
-5. Confirm recurring billing is enabled if you later move beyond manual monthly renewals.
-
-Sandbox verification checklist:
-
-1. Set sandbox merchant credentials and sandbox URLs in Vercel preview or production:
-   - `PAYFAST_PROCESS_URL`
-   - `PAYFAST_VALIDATE_URL`
-2. Keep `BILLING_ENFORCEMENT=off` while testing checkout without locking users out.
-3. Open `/dashboard/billing`, start the Starter and Pro checkout flows, and confirm Payfast receives the recurring subscription fields.
-4. Confirm Payfast calls `https://your-domain.com/api/payfast/notify`.
-5. Verify successful ITNs set `subscription_status=active`, `billing_plan_id`, `billing_subscription_id`, and `current_period_end`.
-6. Verify failed ITNs set `subscription_status=past_due`.
-7. Verify cancelled ITNs set `subscription_status=cancelled`.
-8. Set `BILLING_ENFORCEMENT=on` only after the failed and cancelled paths redirect locked users back to `/dashboard/billing`.
-
-Sources:
-- https://payfast.io/features/subscriptions/
-- https://payfast.io/faq/merchant-faqs/
-- https://status.payfast.io/
-
-## Three-Day Access Window
-
-Key workflow routes use `requirePaidBusiness()`. With `KEY_FEATURE_TRIAL_LOCK=on`, trialing businesses can use key features for `KEY_FEATURE_TRIAL_DAYS` days, then they are redirected to `/dashboard/billing` with a contact section.
-
-Use this while Payfast is skipped:
-
-```env
-BILLING_ENFORCEMENT=off
-KEY_FEATURE_TRIAL_LOCK=on
-KEY_FEATURE_TRIAL_DAYS=3
-CONTINUATION_CONTACT_EMAIL=support@tradeflowsa.co.za
-CONTINUATION_CONTACT_WHATSAPP=
-```
-
-Apply the dedicated Neon migration so new database defaults use 3 days:
-
-```bash
-psql "$DATABASE_URL_UNPOOLED" -f supabase/migrations/20260618_three_day_access_window.sql
-```
-
-To manually extend a pilot, update `businesses.trial_ends_at` in Neon or set the business to an active paid status with a future `current_period_end`.
-
-## Operational Visibility
-
-The app emits structured JSON logs for the highest-risk production flows:
-
-- Auth registration, login success/failure, and rate-limit blocks
-- Payfast ITN receipt, rejection, amount mismatch, ignored events, and processed events
-- WhatsApp webhook verification, signature failures, invalid payloads, and processing failures
-- Quote and invoice PDF generation start, access denial, missing source data, success, and failure
-- Audit/activity logging failures and business lookup database failures
-
-Start with Vercel Runtime Logs while piloting. Search by `message`, `requestId`, `businessId`, `paymentId`, `quoteId`, or `invoiceId`.
-
-Recommended next step before broad launch:
-
-1. Add a Vercel Log Drain to a long-term log store.
-2. Create alerts for:
-   - `Payfast ITN rejected`
-   - `Payfast ITN amount mismatch`
-   - `WhatsApp webhook processing failed`
-   - `Invoice PDF generation failed`
-   - `Quote PDF generation failed`
-   - `Business lookup failed`
-3. Review the `audit_events` table weekly during pilots for auth, sharing, and billing anomalies.
-
-## Auth flow
-
-- Register creates a local `users` record, hashes the password, then creates a `businesses` row.
-- Google sign-up/login uses Auth.js Google OAuth. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and add `/api/auth/callback/google` as the Google OAuth callback path for your app URL.
-- Login uses Auth.js credentials auth or Google OAuth.
-- Middleware protects `/dashboard/**`.
-- Logout clears the session and redirects to `/login`.
-
-## Features included
-
-- Credentials authentication and protected dashboard routes
-- Dashboard metrics and recent quotes
-- Customer CRUD
-- Service CRUD
-- Quote create, list, and detail view
-- Invoice list, detail view, and quote-to-invoice conversion
-- Public invoice route and PDF invoice downloads
-- WhatsApp share links for invoices
-- Overdue invoice automation
-- Responsive dashboard layout
-
-## Notes
-
-- The current app assumes one business per signed-in user.
-- Access control is enforced in application code instead of database RLS.
-- Public invoice pages and PDF downloads are still available without signing in.
+- improve project documentation clarity and onboarding flow
+- add more automated tests for core business workflows
+- refactor long setup instructions into dedicated docs
+- standardize environment configuration and deployment notes
+- review project naming and repository polish for public presentation
