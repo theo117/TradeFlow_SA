@@ -13,7 +13,7 @@ import {
   recurringInvoiceTemplates,
   services
 } from "@/lib/db/schema";
-import { syncOverdueInvoices, syncOverdueInvoicesAsAdmin } from "@/lib/invoices";
+import { syncOverdueInvoices } from "@/lib/invoices";
 import { parseWhatsappDeliveryState, type WhatsappDeliveryState } from "@/lib/whatsapp";
 
 function mapBusiness(row: {
@@ -757,7 +757,10 @@ export const getInvoices = cache(async () => {
   }));
 });
 
-async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType<typeof eq>) {
+async function getInvoiceDetail(
+  whereClause: ReturnType<typeof and> | ReturnType<typeof eq>,
+  deriveOverdueStatus = false
+) {
   const [invoiceRow] = await db
     .select({
       id: invoices.id,
@@ -765,7 +768,13 @@ async function getInvoiceDetail(whereClause: ReturnType<typeof and> | ReturnType
       customerId: invoices.customerId,
       quoteId: invoices.quoteId,
       invoiceNumber: invoices.invoiceNumber,
-      status: invoices.status,
+      // Public documents display the eligible overdue state without persisting it.
+      // Use PostgreSQL's date boundary, exactly as the private refresh does.
+      status: deriveOverdueStatus
+        ? sql<(typeof invoices.$inferSelect)["status"]>`case
+            when ${invoices.status} = 'sent' and ${invoices.dueDate} < current_date
+            then 'overdue' else ${invoices.status} end`
+        : invoices.status,
       total: invoices.total,
       dueDate: invoices.dueDate,
       createdAt: invoices.createdAt,
@@ -883,6 +892,5 @@ export const getInvoiceById = cache(async (id: string) => {
 });
 
 export const getPublicInvoiceById = cache(async (id: string) => {
-  await syncOverdueInvoicesAsAdmin();
-  return getInvoiceDetail(eq(invoices.id, id));
+  return getInvoiceDetail(eq(invoices.id, id), true);
 });

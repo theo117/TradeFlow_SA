@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invoices } from "@/lib/db/schema";
 import { getOrCreatePublicShareUrl } from "@/lib/public-access";
@@ -7,23 +7,21 @@ import { normalizeWhatsappPhone, resolveCustomerWhatsappPhone } from "@/lib/what
 
 const DEFAULT_INVOICE_DUE_DAYS = 7;
 
-export async function syncOverdueInvoices(businessId?: string | null) {
+export async function syncOverdueInvoices(businessId: string) {
+  if (typeof businessId !== "string" || !businessId.trim()) {
+    throw new Error("A business ID is required to refresh overdue invoices");
+  }
+
   await db
     .update(invoices)
     .set({ status: "overdue" })
     .where(
-      businessId
-        ? and(
-            eq(invoices.businessId, businessId),
-            ne(invoices.status, "paid"),
-            sql`${invoices.dueDate} < current_date`
-          )
-        : and(ne(invoices.status, "paid"), sql`${invoices.dueDate} < current_date`)
+      and(
+        eq(invoices.businessId, businessId),
+        eq(invoices.status, "sent"),
+        sql`${invoices.dueDate} < current_date`
+      )
     );
-}
-
-export async function syncOverdueInvoicesAsAdmin(businessId?: string | null) {
-  await syncOverdueInvoices(businessId);
 }
 
 export function getDefaultInvoiceDueDate() {
