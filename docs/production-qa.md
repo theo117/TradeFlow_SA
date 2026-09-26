@@ -4,12 +4,7 @@ Use this checklist before moving beyond pilots. Run it against the deployed app 
 
 ## Preflight
 
-- Confirm Neon migrations are applied:
-  - `supabase/migrations/20260617_email_confirmation.sql`
-  - `supabase/migrations/20260618_password_recovery.sql`
-  - `supabase/migrations/20260618_revoke_unconfirmed_email_access.sql`
-  - `supabase/migrations/20260618_three_day_access_window.sql`
-  - `supabase/migrations/20260705_production_hardening.sql`
+- Confirm migration history is verified using the [fresh or existing database migration procedure](production-readiness.md#migrations). Existing canonical installations require explicit baseline adoption; do not replay historical SQL scripts as a substitute.
 - Confirm Vercel Production env vars are set:
   - `DATABASE_URL`
   - `DATABASE_URL_UNPOOLED`
