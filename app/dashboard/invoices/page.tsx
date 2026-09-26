@@ -8,7 +8,7 @@ import { currency } from "@/lib/utils";
 
 export default async function InvoicesPage() {
   const invoices = await getInvoices();
-  const unpaidInvoices = invoices.filter((invoice) => invoice.status !== "paid");
+  const unpaidInvoices = invoices.filter((invoice) => invoice.status !== "paid" && invoice.status !== "void");
 
   return (
     <div className="space-y-6">

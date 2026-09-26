@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requirePaidBusiness } from "@/lib/auth";
 import { logActivityEvent } from "@/lib/activity";
 import { db } from "@/lib/db";
 import {
+  auditEvents,
   businesses,
   customers,
   invoiceItems,
@@ -149,14 +150,22 @@ export async function updateInvoiceStatus(
   nextStatus: "draft" | "sent" | "paid" | "overdue"
 ) {
   const business = await requirePaidBusiness();
-  const status = invoiceStatusSchema.parse(nextStatus);
-
   try {
-    const [updatedInvoice] = await db
-      .update(invoices)
-      .set({ status })
-      .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
-      .returning({ id: invoices.id, customerId: invoices.customerId, status: invoices.status });
+    const status = invoiceStatusSchema.parse(nextStatus);
+    if (status === "void") throw new Error("Use the void action to preserve the invoice audit trail");
+    const updatedInvoice = await db.transaction(async (tx) => {
+      const [current] = await tx.select({ status: invoices.status }).from(invoices)
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+        .limit(1).for("update");
+      if (!current) return null;
+      if (current.status === "void") throw new Error("Void invoices cannot change status");
+      if (current.status === "paid" && status !== "paid") throw new Error("Paid invoices are protected and cannot change status");
+      if (current.status !== "draft" && status === "draft") throw new Error("Issued invoices cannot be returned to draft. Void an unpaid invoice instead.");
+      const [updated] = await tx.update(invoices).set({ status })
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+        .returning({ id: invoices.id, customerId: invoices.customerId, status: invoices.status });
+      return updated;
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/invoices");
@@ -216,11 +225,15 @@ export async function recordInvoiceReminder(
       };
     }
 
+    if (invoice.status === "void") {
+      return { error: true, message: "Void invoices are not payable and cannot be sent for collection" };
+    }
+
     if (invoice.status === "draft") {
       await db
         .update(invoices)
         .set({ status: "sent" })
-        .where(eq(invoices.id, invoice.id));
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoice.id), eq(invoices.status, "draft")));
     }
 
     if (channel === "whatsapp") {
@@ -358,7 +371,7 @@ export async function deleteInvoice(invoiceId: string) {
     const [deletedInvoice] = await db
       .delete(invoices)
       .where(
-        and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId))
+        and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId), eq(invoices.status, "draft"))
       )
       .returning({
         id: invoices.id,
@@ -368,10 +381,7 @@ export async function deleteInvoice(invoiceId: string) {
       });
 
     if (!deletedInvoice) {
-      return {
-        error: true,
-        message: "Invoice not found"
-      };
+      return { error: true, message: "Only draft invoices can be deleted. Sent or overdue invoices must be voided; paid and void invoices are protected." };
     }
 
     await logActivityEvent({
@@ -399,5 +409,60 @@ export async function deleteInvoice(invoiceId: string) {
       error: true,
       message: error instanceof Error ? error.message : "Unable to delete invoice"
     };
+  }
+}
+
+
+export async function voidInvoice(invoiceId: string) {
+  const business = await requirePaidBusiness();
+  try {
+    if (!business.owner_id) throw new Error("An authenticated actor is required to void an invoice");
+    const result = await db.transaction(async (tx) => {
+      const [invoice] = await tx.select({
+        id: invoices.id, invoiceNumber: invoices.invoiceNumber, status: invoices.status,
+        customerId: invoices.customerId, quoteId: invoices.quoteId,
+        recurringTemplateId: invoices.recurringTemplateId, recurringPeriod: invoices.recurringPeriod,
+        total: sql<string>`${invoices.total}::text`, dueDate: invoices.dueDate, createdAt: invoices.createdAt
+      }).from(invoices)
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
+        .limit(1).for("update");
+      if (!invoice) throw new Error("Invoice not found");
+      if (invoice.status === "void") return { invoice, changed: false };
+      if (invoice.status === "paid") throw new Error("Paid invoices are protected and cannot be voided or deleted");
+      if (invoice.status !== "sent" && invoice.status !== "overdue") throw new Error("Only sent or overdue invoices can be voided. Draft invoices can be deleted.");
+
+      // Persist the authenticated actor and exact financial identity in the same
+      // transaction. Do not use the best-effort audit/activity logging wrappers.
+      await tx.insert(auditEvents).values({
+        businessId: business.id,
+        userId: business.owner_id,
+        action: "void",
+        entityType: "invoice",
+        entityId: invoice.id,
+        metadata: {
+          invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber,
+          actorUserId: business.owner_id, businessId: business.id,
+          customerId: invoice.customerId, quoteId: invoice.quoteId,
+          recurringTemplateId: invoice.recurringTemplateId, recurringPeriod: invoice.recurringPeriod,
+          total: invoice.total, dueDate: invoice.dueDate, invoiceCreatedAt: invoice.createdAt,
+          previousStatus: invoice.status, resultingStatus: "void"
+        }
+      });
+      await tx.update(invoices).set({ status: "void" })
+        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoice.id)));
+      return { invoice, changed: true };
+    });
+    if (result.changed) {
+      await logActivityEvent({ businessId: business.id, customerId: result.invoice.customerId,
+        invoiceId, type: "invoice.voided", description: `Invoice ${result.invoice.invoiceNumber} was voided and is not payable.` });
+    }
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/invoices");
+    revalidatePath(`/dashboard/invoices/${invoiceId}`);
+    revalidatePath(`/dashboard/customers/${result.invoice.customerId}`);
+    revalidatePath(`/invoice/${invoiceId}`);
+    return { error: false, message: result.changed ? "Invoice voided. It is no longer payable." : "Invoice already void", invoiceId };
+  } catch (error) {
+    return { error: true, message: error instanceof Error ? error.message : "Unable to void invoice" };
   }
 }

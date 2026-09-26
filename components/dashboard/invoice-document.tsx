@@ -8,7 +8,7 @@ import { currency, formatDate } from "@/lib/utils";
 type InvoiceDocumentProps = {
   invoice: {
     invoice_number: string;
-    status: "draft" | "sent" | "paid" | "overdue";
+    status: "draft" | "sent" | "paid" | "overdue" | "void";
     total: number;
     due_date: string;
     created_at: string;
@@ -68,6 +68,12 @@ export function InvoiceDocument({
         </div>
       </div>
 
+      {invoice.status === "void" ? (
+        <p role="status" className="rounded-2xl border border-slate-300 bg-slate-100 px-6 py-4 font-semibold text-ink">
+          Void — this invoice is not payable. Retained for your records.
+        </p>
+      ) : null}
+
       <Card className="overflow-hidden border-slate-200/80 bg-white/95 p-0">
         <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#f8fbff_0%,#eef4ff_100%)] px-6 py-6 sm:px-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -120,16 +126,16 @@ export function InvoiceDocument({
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Payment instructions
+              {invoice.status === "void" ? "Void invoice" : "Payment instructions"}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              {business.payment_instructions ??
+              {invoice.status === "void" ? "Do not pay this invoice. Its original amount is retained for your records." : business.payment_instructions ??
                 "Please pay by the due date and use the invoice number as your payment reference."}
             </p>
-            {business.bank_name ||
+            {invoice.status !== "void" && (business.bank_name ||
             business.bank_account_name ||
             business.bank_account_number ||
-            business.bank_branch_code ? (
+            business.bank_branch_code) ? (
               <div className="mt-4 space-y-1 text-sm text-slate-500">
                 {business.bank_name ? <p>Bank: {business.bank_name}</p> : null}
                 {business.bank_account_name ? (
@@ -179,11 +185,11 @@ export function InvoiceDocument({
 
           <div className="mt-6 flex flex-col gap-4 rounded-3xl bg-[#0b1020] px-6 py-5 text-white sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm text-slate-300">Amount due</p>
+              <p className="text-sm text-slate-300">{invoice.status === "void" ? "Original invoice total — not payable" : "Amount due"}</p>
               <p className="mt-1 text-3xl font-semibold">{currency(Number(invoice.total))}</p>
             </div>
             <div className="text-sm text-slate-300">
-              Due by {formatDate(invoice.due_date)}
+              {invoice.status === "void" ? "Original due date" : "Due by"} {formatDate(invoice.due_date)}
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   deleteInvoice,
+  voidInvoice,
   updateInvoiceStatus
 } from "@/app/dashboard/invoices/actions";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
@@ -38,6 +39,7 @@ type InvoiceRow = Pick<
 };
 
 function getDueLabel(invoice: InvoiceRow) {
+  if (invoice.status === "void") return "Void — not payable";
   if (invoice.status === "paid") {
     return "Paid";
   }
@@ -69,7 +71,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
   const PAGE_SIZE = 6;
   const [rows, setRows] = useState(invoices);
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "draft" | "sent" | "paid" | "overdue"
+    "all" | "draft" | "sent" | "paid" | "overdue" | "void"
   >("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InvoiceRow | null>(null);
@@ -184,21 +186,24 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
     const snapshot = rows;
     const invoiceId = deleteTarget.id;
     setPendingId(invoiceId);
-    setRows((current) => current.filter((invoice) => invoice.id !== invoiceId));
 
     try {
-      const result = await deleteInvoice(invoiceId);
+      const shouldVoid = deleteTarget.status === "sent" || deleteTarget.status === "overdue";
+      const result = await (shouldVoid ? voidInvoice(invoiceId) : deleteInvoice(invoiceId));
 
       if (result.error) {
         setRows(snapshot);
         setToast({ kind: "error", message: result.message });
       } else {
+        setRows((current) => shouldVoid
+          ? current.map((invoice) => invoice.id === invoiceId ? { ...invoice, status: "void" } : invoice)
+          : current.filter((invoice) => invoice.id !== invoiceId));
         setToast({ kind: "success", message: result.message });
         router.refresh();
       }
     } catch {
       setRows(snapshot);
-      setToast({ kind: "error", message: "Unable to delete invoice" });
+      setToast({ kind: "error", message: "Unable to delete or void invoice" });
     }
 
     setPendingId(null);
@@ -225,10 +230,11 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
             { label: "Draft", value: "draft" },
             { label: "Sent", value: "sent" },
             { label: "Paid", value: "paid" },
-            { label: "Overdue", value: "overdue" }
+            { label: "Overdue", value: "overdue" },
+            { label: "Void", value: "void" }
           ]}
           onFilterChange={(value) =>
-            setStatusFilter(value as "all" | "draft" | "sent" | "paid" | "overdue")
+            setStatusFilter(value as "all" | "draft" | "sent" | "paid" | "overdue" | "void")
           }
           resultLabel={`${processedItems.length} of ${rows.length} invoices`}
           onReset={() => {
@@ -318,7 +324,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                       >
                         View
                       </Link>
-                      {invoice.status !== "paid" ? (
+                      {invoice.status !== "paid" && invoice.status !== "void" ? (
                         <Button
                           type="button"
                           onClick={() => handleMarkPaid(invoice.id)}
@@ -333,16 +339,18 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                       >
                         Download PDF
                       </Link>
+                      {invoice.status === "draft" || invoice.status === "sent" || invoice.status === "overdue" ? (
                       <Button
                         type="button"
                         variant="danger"
                         onClick={() => setDeleteTarget(invoice)}
                         disabled={pendingId !== null}
-                        title={`Delete ${invoice.invoice_number}`}
+                        title={`${invoice.status === "draft" ? "Delete" : "Void"} ${invoice.invoice_number}`}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
+                        {invoice.status === "draft" ? "Delete" : "Void"}
                       </Button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -405,7 +413,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {invoice.status !== "paid" ? (
+                {invoice.status !== "paid" && invoice.status !== "void" ? (
                   <Button
                     type="button"
                     onClick={() => handleMarkPaid(invoice.id)}
@@ -421,16 +429,18 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
                   <Download className="mr-2 h-4 w-4" />
                   PDF
                 </Link>
+                {invoice.status === "draft" || invoice.status === "sent" || invoice.status === "overdue" ? (
                 <Button
                   type="button"
                   variant="danger"
                   onClick={() => setDeleteTarget(invoice)}
                   disabled={pendingId !== null}
-                  title={`Delete ${invoice.invoice_number}`}
+                  title={`${invoice.status === "draft" ? "Delete" : "Void"} ${invoice.invoice_number}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
+                  {invoice.status === "draft" ? "Delete" : "Void"}
                 </Button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -448,9 +458,12 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title={`Delete ${deleteTarget?.invoice_number ?? "invoice"}?`}
-        description="This permanently removes the invoice, its line items, and active public links. The source quote will remain available."
-        confirmLabel="Delete invoice"
+        title={`${deleteTarget?.status === "draft" ? "Delete" : "Void"} ${deleteTarget?.invoice_number ?? "invoice"}?`}
+        description={deleteTarget?.status === "draft"
+          ? "This permanently removes the draft, its line items, and active public links. The source quote will remain available."
+          : "This preserves the invoice and its history, but marks it void and not payable. This cannot be undone here."}
+        confirmLabel={deleteTarget?.status === "draft" ? "Delete invoice" : "Void invoice"}
+        pendingLabel={deleteTarget?.status === "draft" ? "Deleting..." : "Voiding..."}
         pending={Boolean(deleteTarget && pendingId === deleteTarget.id)}
         onCancel={() => pendingId === null && setDeleteTarget(null)}
         onConfirm={handleDelete}

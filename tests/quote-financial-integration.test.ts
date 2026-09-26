@@ -69,7 +69,13 @@ describe.skipIf(!adminUrl)("quote financial integrity (disposable PostgreSQL 17)
   afterEach(async () => {
     if (sql) await sql.end();
     if (pool) await pool.end();
-    if (name) await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    if (name) {
+      // Pool.end() may resolve before PostgreSQL observes the closed sockets.
+      await vi.waitFor(async () => {
+        expect((await admin.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=$1", [name])).rows[0].count).toBe(0);
+      }, { timeout: 5000, interval: 20 });
+      await admin.query(`DROP DATABASE "${name}"`);
+    }
   });
   afterAll(async () => { if (admin) await admin.end(); });
 

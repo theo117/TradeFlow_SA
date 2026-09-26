@@ -61,7 +61,7 @@ export const quoteSchema = z.object({
   items: z.array(quoteItemSchema).min(1)
 });
 
-export const invoiceStatusSchema = z.enum(["draft", "sent", "paid", "overdue"]);
+export const invoiceStatusSchema = z.enum(["draft", "sent", "paid", "overdue", "void"]);
 
 export const convertQuoteToInvoiceSchema = z.object({
   quoteId: z.string().uuid(),

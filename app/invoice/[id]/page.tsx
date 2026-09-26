@@ -35,7 +35,7 @@ export default async function PublicInvoicePage({
   const pdfHref = `/api/invoices/${invoice.id}/pdf?token=${encodedToken}`;
   const whatsappRecipient = getInvoiceWhatsappRecipient(invoice.customer);
   const publicUrl = `${getBaseUrl()}/invoice/${invoice.id}?token=${encodedToken}`;
-  const whatsappHref = whatsappRecipient
+  const whatsappHref = invoice.status !== "void" && whatsappRecipient
     ? buildWhatsappInvoiceUrl({
         phone: whatsappRecipient,
         customerName: invoice.customer.name,
@@ -62,7 +62,7 @@ export default async function PublicInvoicePage({
             <Link href={pdfHref} className={buttonVariants({})}>
               Download PDF
             </Link>
-            <WhatsAppShareButton href={whatsappHref} />
+            {invoice.status !== "void" ? <WhatsAppShareButton href={whatsappHref} /> : null}
           </div>
         </div>
 

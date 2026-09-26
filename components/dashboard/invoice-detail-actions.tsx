@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   deleteInvoice,
+  voidInvoice,
   recordInvoiceReminder,
   revokeInvoicePublicLinks,
   updateInvoiceStatus
@@ -25,7 +26,7 @@ export function InvoiceDetailActions({
   reminderWhatsappHref
 }: {
   invoiceId: string;
-  status: "draft" | "sent" | "paid" | "overdue";
+  status: "draft" | "sent" | "paid" | "overdue" | "void";
   pdfHref: string;
   emailHref?: string | null;
   whatsappHref?: string | null;
@@ -35,7 +36,7 @@ export function InvoiceDetailActions({
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState(status);
   const [pending, setPending] = useState<
-    "sent" | "paid" | "email" | "whatsapp" | "revoke" | "delete" | null
+    "sent" | "paid" | "email" | "whatsapp" | "revoke" | "delete" | "void" | null
   >(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [toast, setToast] = useState<InlineToastState>(null);
@@ -102,18 +103,27 @@ export function InvoiceDetailActions({
   }
 
   async function handleDelete() {
-    setPending("delete");
-    const result = await deleteInvoice(invoiceId);
-
-    if (result.error) {
-      setToast({ kind: "error", message: result.message });
+    const shouldVoid = currentStatus === "sent" || currentStatus === "overdue";
+    setPending(shouldVoid ? "void" : "delete");
+    try {
+      const result = await (shouldVoid ? voidInvoice(invoiceId) : deleteInvoice(invoiceId));
+      if (result.error) {
+        setToast({ kind: "error", message: result.message });
+        return;
+      }
+      if (shouldVoid) {
+        setCurrentStatus("void");
+        setToast({ kind: "success", message: result.message });
+      } else {
+        router.push("/dashboard/invoices?success=Invoice%20deleted");
+      }
+      router.refresh();
+    } catch {
+      setToast({ kind: "error", message: "Unable to confirm the result. Refresh or retry the operation." });
+    } finally {
       setPending(null);
       setConfirmDeleteOpen(false);
-      return;
     }
-
-    router.push("/dashboard/invoices?success=Invoice%20deleted");
-    router.refresh();
   }
 
   const primaryEmailHref =
@@ -134,7 +144,7 @@ export function InvoiceDetailActions({
             {pending === "sent" ? "Updating..." : "Mark sent"}
           </Button>
         ) : null}
-        {currentStatus !== "paid" ? (
+        {currentStatus !== "paid" && currentStatus !== "void" ? (
           <Button
             type="button"
             onClick={() => handleStatus("paid")}
@@ -154,44 +164,50 @@ export function InvoiceDetailActions({
         >
           {pending === "revoke" ? "Revoking..." : "Revoke public links"}
         </Button>
-        <Button
-          type="button"
-          variant="danger"
-          disabled={pending !== null}
-          onClick={() => setConfirmDeleteOpen(true)}
-        >
-          Delete invoice
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={pending !== null || !primaryEmailHref}
-          onClick={() => handleReminder("email", primaryEmailHref)}
-        >
-          {pending === "email"
-            ? "Preparing..."
-            : currentStatus === "draft"
-              ? "Send via Email"
-              : "Resend Email"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={pending !== null}
-          onClick={() => handleReminder("whatsapp", primaryWhatsappHref)}
-        >
-          {pending === "whatsapp"
-            ? "Preparing..."
-            : currentStatus === "draft"
-              ? "Send via WhatsApp"
-              : "Send Reminder"}
-        </Button>
-        <EmailShareButton
-          href={emailHref}
-          label={currentStatus === "draft" ? "Email draft" : "Open email draft"}
-          className="hidden"
-        />
-        <WhatsAppShareButton href={whatsappHref} className="hidden" />
+        {currentStatus === "draft" || currentStatus === "sent" || currentStatus === "overdue" ? (
+          <Button
+            type="button"
+            variant="danger"
+            disabled={pending !== null}
+            onClick={() => setConfirmDeleteOpen(true)}
+          >
+            {currentStatus === "draft" ? "Delete invoice" : "Void invoice"}
+          </Button>
+        ) : null}
+        {currentStatus !== "void" ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending !== null || !primaryEmailHref}
+              onClick={() => handleReminder("email", primaryEmailHref)}
+            >
+              {pending === "email"
+                ? "Preparing..."
+                : currentStatus === "draft"
+                  ? "Send via Email"
+                  : "Resend Email"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending !== null}
+              onClick={() => handleReminder("whatsapp", primaryWhatsappHref)}
+            >
+              {pending === "whatsapp"
+                ? "Preparing..."
+                : currentStatus === "draft"
+                  ? "Send via WhatsApp"
+                  : "Send Reminder"}
+            </Button>
+            <EmailShareButton
+              href={emailHref}
+              label={currentStatus === "draft" ? "Email draft" : "Open email draft"}
+              className="hidden"
+            />
+            <WhatsAppShareButton href={whatsappHref} className="hidden" />
+          </>
+        ) : null}
         <Link
           href="/dashboard/invoices"
           className={buttonVariants({ variant: "secondary" })}
@@ -202,11 +218,14 @@ export function InvoiceDetailActions({
 
       <ConfirmDialog
         open={confirmDeleteOpen}
-        title="Delete this invoice?"
-        description="This permanently removes the invoice, its line items, and active public links. The source quote will remain available."
-        confirmLabel="Delete invoice"
-        pending={pending === "delete"}
-        onCancel={() => pending !== "delete" && setConfirmDeleteOpen(false)}
+        title={currentStatus === "draft" ? "Delete this invoice?" : "Void this invoice?"}
+        description={currentStatus === "draft"
+          ? "This permanently removes the draft, its line items, and active public links. The source quote will remain available."
+          : "This preserves the invoice and its history, but marks it void and not payable. This cannot be undone here."}
+        confirmLabel={currentStatus === "draft" ? "Delete invoice" : "Void invoice"}
+        pendingLabel={currentStatus === "draft" ? "Deleting..." : "Voiding..."}
+        pending={pending === "delete" || pending === "void"}
+        onCancel={() => pending === null && setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
       />
 

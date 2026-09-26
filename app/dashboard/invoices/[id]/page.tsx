@@ -34,7 +34,7 @@ export default async function InvoiceDetailPage({
     invoice.business.id,
     invoice.business.owner_id
   );
-  const emailHref = invoice.customer.email
+  const emailHref = invoice.status !== "void" && invoice.customer.email
     ? buildInvoiceEmailUrl({
         email: invoice.customer.email,
         customerName: invoice.customer.name,
@@ -46,7 +46,7 @@ export default async function InvoiceDetailPage({
       })
     : null;
   const whatsappRecipient = getInvoiceWhatsappRecipient(invoice.customer);
-  const whatsappHref = whatsappRecipient
+  const whatsappHref = invoice.status !== "void" && whatsappRecipient
     ? buildWhatsappInvoiceUrl({
         phone: whatsappRecipient,
         customerName: invoice.customer.name,
@@ -56,7 +56,7 @@ export default async function InvoiceDetailPage({
         invoiceUrl: publicUrl
       })
     : null;
-  const reminderEmailHref = invoice.customer.email
+  const reminderEmailHref = invoice.status !== "void" && invoice.customer.email
     ? buildInvoiceReminderEmailUrl({
         email: invoice.customer.email,
         customerName: invoice.customer.name,
@@ -67,7 +67,7 @@ export default async function InvoiceDetailPage({
         pdfUrl: publicPdfUrl
       })
     : null;
-  const reminderWhatsappHref = whatsappRecipient
+  const reminderWhatsappHref = invoice.status !== "void" && whatsappRecipient
     ? buildWhatsappInvoiceReminderUrl({
         phone: whatsappRecipient,
         customerName: invoice.customer.name,
@@ -85,6 +85,7 @@ export default async function InvoiceDetailPage({
       customer={invoice.customer}
       actions={
         <InvoiceDetailActions
+          key={invoice.status}
           invoiceId={invoice.id}
           status={invoice.status}
           pdfHref={pdfHref}

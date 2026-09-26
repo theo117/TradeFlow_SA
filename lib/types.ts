@@ -41,7 +41,7 @@ export type Quote = {
   items?: QuoteItem[];
 };
 
-export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
+export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "void";
 
 export type InvoiceItem = {
   id?: string;

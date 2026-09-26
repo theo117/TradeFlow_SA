@@ -24,7 +24,8 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "draft",
   "sent",
   "paid",
-  "overdue"
+  "overdue",
+  "void"
 ]);
 export const recurringFrequencyEnum = pgEnum("recurring_frequency", [
   "monthly",

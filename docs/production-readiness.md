@@ -150,6 +150,46 @@ The test server must be disposable. The suite invokes the real migration command
 isolated databases, exercises simultaneous calls on separate connections, retries,
 rollback, subsequent periods, tenant isolation and database uniqueness, then removes its fixtures.
 
+### Invoice deletion and void policy (H10)
+
+Migration `0002_invoice_void_status` adds `void` to `invoice_status`; it does not
+rewrite invoice rows or reset invoice numbering. Apply pending migrations with
+`npm run db:migrate` and verify a rerun reports zero applied migrations. Existing
+untracked canonical installations must first follow the explicit baseline procedure
+above. The frozen initial schema and historical migration SQL remain unchanged.
+
+Before eventual rollout, stop old application instances from mutating invoices,
+apply the migration, and start the updated application. Old code permits issued
+invoice deletion and does not understand the void policy; do not mix application
+versions or roll back to such code after creating void invoices. Validate on a
+restored disposable database first. No production commands were run for H10.
+
+Drafts may be deleted. Sent/overdue invoices may be voided; paid and void invoices
+cannot be deleted. Paid invoices cannot be voided. Issued invoices cannot be reset
+to draft, paid invoices cannot be downgraded, and void is terminal in this UI/API.
+Voiding locks the tenant-scoped invoice and inserts an `audit_events` record with
+`action = 'void'` in the same transaction as the status change. The record includes
+actor ID (also copied into metadata), timestamp, previous/resulting status, invoice
+ID/number, tenant/customer/quote/recurring references, exact original total and dates.
+No reason is collected. Existing activity logging supplements this durable record.
+
+Public links retain their normal access controls and show void documents as not
+payable. HTML/PDF retain original amounts and details but suppress collection
+prompts and payment instructions. Outstanding totals exclude void invoices; historical
+invoice counts and lifetime totals continue to include retained documents. No refund,
+credit-note, reversal, or tax correction is introduced.
+
+Review evidence of historical issued/paid invoice deletions against available backups
+and audit/activity records before rollout. This change cannot restore deleted data,
+does not infer missing history, and does not retroactively void invoices.
+
+Disposable PostgreSQL 17 integration tests:
+
+```bash
+VOID_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h10_test_admin \
+  npm test -- tests/invoice-void.test.ts
+```
+
 ## Monitoring
 
 Configure alerts for:

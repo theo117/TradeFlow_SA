@@ -20,7 +20,7 @@ type InvoicePdfPayload = {
     | "logo_url"
   >;
   customer: Pick<Customer, "name" | "email" | "phone" | "address">;
-  invoice: Pick<Invoice, "invoice_number" | "created_at" | "due_date" | "total">;
+  invoice: Pick<Invoice, "invoice_number" | "created_at" | "due_date" | "total" | "status">;
   items: Pick<InvoiceItem, "description" | "quantity" | "price" | "subtotal">[];
 };
 
@@ -70,7 +70,7 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
     color: ink
   });
 
-  page.drawText("Invoice", {
+  page.drawText(payload.invoice.status === "void" ? "VOID - NOT PAYABLE" : "Invoice", {
     x: margin,
     y: y - 48,
     size: 12,
@@ -250,7 +250,7 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
     color: ink
   });
 
-  page.drawText("Total due", {
+  page.drawText(payload.invoice.status === "void" ? "Original total (void)" : "Total due", {
     x: width - margin - 156,
     y: y - 18,
     size: 11,
@@ -266,6 +266,13 @@ export async function generateInvoicePdf(payload: InvoicePdfPayload) {
   });
 
   y -= 94;
+
+  if (payload.invoice.status === "void") {
+    page.drawText("VOID - NOT PAYABLE. Retained for your records. Do not pay this invoice.", {
+      x: margin, y, size: 10, font: fontBold, color: ink, maxWidth: width - margin * 2
+    });
+    return pdf.save();
+  }
 
   const bankingLines = [
     payload.business.bank_name ? `Bank: ${payload.business.bank_name}` : null,

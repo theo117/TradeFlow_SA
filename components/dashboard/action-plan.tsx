@@ -32,7 +32,7 @@ type BusinessSnapshot = {
 type PriorityInvoice = {
   id: string;
   invoice_number: string;
-  status: "draft" | "sent" | "paid" | "overdue";
+  status: "draft" | "sent" | "paid" | "overdue" | "void";
   total: number | string;
   due_date: string;
   customer?: {

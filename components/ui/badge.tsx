@@ -6,13 +6,15 @@ export function Badge({
   variant = "draft"
 }: {
   children: ReactNode;
-  variant?: "draft" | "sent" | "accepted" | "paid" | "overdue";
+  variant?: "draft" | "sent" | "accepted" | "paid" | "overdue" | "void";
 }) {
   return (
     <span
       className={cn(
         "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
-        variant === "paid"
+        variant === "void"
+          ? "bg-slate-200 text-slate-700"
+          : variant === "paid"
           ? "bg-emerald-100 text-emerald-700"
           : variant === "accepted"
             ? "bg-emerald-100 text-emerald-700"

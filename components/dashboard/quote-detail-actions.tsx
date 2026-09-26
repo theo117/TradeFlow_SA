@@ -36,7 +36,7 @@ export function QuoteDetailActions({
   existingInvoice?: {
     id: string;
     invoice_number: string;
-    status: "draft" | "sent" | "paid" | "overdue";
+    status: "draft" | "sent" | "paid" | "overdue" | "void";
   } | null;
 }) {
   const router = useRouter();

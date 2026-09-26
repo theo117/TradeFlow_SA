@@ -435,7 +435,7 @@ export const getCustomerDetail = cache(async (id: string) => {
         count: count(),
         total: sql<string>`coalesce(sum(${invoices.total}), 0)::text`,
         paid: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} = 'paid'), 0)::text`,
-        outstanding: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} <> 'paid'), 0)::text`,
+        outstanding: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} in ('draft', 'sent', 'overdue')), 0)::text`,
         overdue: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} = 'overdue'), 0)::text`
       })
       .from(invoices)
