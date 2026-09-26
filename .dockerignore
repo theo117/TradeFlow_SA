@@ -12,3 +12,15 @@ docs
 .vscode
 
 *.log
+
+# Local environment files; only the root placeholder template is safe to copy.
+**/.env
+**/.env.*
+!.env.example
+
+# Local audit, temporary, and demo artifacts.
+audit/
+tmp/
+temp/
+demo/
+.tools/
