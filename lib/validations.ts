@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_QUOTE_QUANTITY, quoteMoneyToCents } from "@/lib/quote-money";
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -35,11 +36,23 @@ export const serviceSchema = z.object({
   price: z.coerce.number().min(0)
 });
 
+// Legacy/browser amounts are validated when present, but never used for pricing.
+const submittedQuoteMoneySchema = z.number().finite().refine((value) => {
+  try {
+    quoteMoneyToCents(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, "Quote amounts must be non-negative, within the supported limit, and have at most two decimal places.");
+
+export const quoteQuantitySchema = z.number().finite().int().min(1).max(MAX_QUOTE_QUANTITY);
+
 export const quoteItemSchema = z.object({
   service_id: z.string().uuid(),
-  quantity: z.number().int().min(1),
-  price: z.number().min(0),
-  subtotal: z.number().min(0)
+  quantity: quoteQuantitySchema,
+  price: submittedQuoteMoneySchema.optional(),
+  subtotal: submittedQuoteMoneySchema.optional()
 });
 
 export const quoteSchema = z.object({

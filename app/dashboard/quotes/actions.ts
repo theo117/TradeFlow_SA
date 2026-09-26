@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import { requirePaidBusiness } from "@/lib/auth";
 import { logActivityEvent } from "@/lib/activity";
@@ -11,7 +11,7 @@ import { businesses, customers, quoteItems, quotes, services } from "@/lib/db/sc
 import { revokePublicShareTokens } from "@/lib/public-access";
 import { quoteSchema } from "@/lib/validations";
 import { sendQuoteWhatsappMessage } from "@/lib/whatsapp";
-import { calculateQuoteTotal } from "@/lib/workflows";
+import { calculateQuoteAmounts } from "@/lib/workflows";
 import { isNextRedirectError } from "@/lib/navigation";
 
 export async function createQuote(formData: FormData) {
@@ -25,7 +25,6 @@ export async function createQuote(formData: FormData) {
       items
     });
 
-    const total = calculateQuoteTotal(payload.items);
     const [customer] = await db
       .select({ id: customers.id })
       .from(customers)
@@ -43,7 +42,7 @@ export async function createQuote(formData: FormData) {
 
     const serviceIds = [...new Set(payload.items.map((item) => item.service_id))];
     const availableServices = await db
-      .select({ id: services.id })
+      .select({ id: services.id, price: sql<string>`${services.price}::text` })
       .from(services)
       .where(
         and(
@@ -56,6 +55,8 @@ export async function createQuote(formData: FormData) {
       redirect("/dashboard/quotes/new?error=One%20or%20more%20services%20are%20invalid");
     }
 
+    const calculated = calculateQuoteAmounts(payload.items, availableServices);
+
     const quote = await db.transaction(async (tx) => {
       const [createdQuote] = await tx
         .insert(quotes)
@@ -63,17 +64,17 @@ export async function createQuote(formData: FormData) {
           businessId: business.id,
           customerId: payload.customerId,
           status: payload.status,
-          total
+          total: sql`${calculated.total}`
         })
         .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
 
       await tx.insert(quoteItems).values(
-        payload.items.map((item) => ({
+        calculated.items.map((item) => ({
           quoteId: createdQuote.id,
           serviceId: item.service_id,
           quantity: item.quantity,
-          price: item.price,
-          subtotal: item.subtotal
+          price: sql`${item.price}`,
+          subtotal: sql`${item.subtotal}`
         }))
       );
 

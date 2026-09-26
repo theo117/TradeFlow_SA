@@ -71,7 +71,11 @@ export function QuoteBuilderForm({
 
   return (
     <form action={action} className="space-y-6">
-      <input type="hidden" name="items" value={JSON.stringify(calculatedItems)} />
+      <input
+        type="hidden"
+        name="items"
+        value={JSON.stringify(items.map(({ service_id, quantity }) => ({ service_id, quantity })))}
+      />
 
       <div className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm">
         <div className="mb-5">
