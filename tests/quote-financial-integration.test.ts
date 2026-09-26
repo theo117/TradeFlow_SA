@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import postgres from "postgres";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "../lib/db/schema";
@@ -50,6 +51,10 @@ describe.skipIf(!adminUrl)("quote financial integrity (disposable PostgreSQL 17)
     url.pathname = `/${name}`;
     pool = new Pool({ connectionString: url.href });
     await pool.query(canonical);
+    // Canonical SQL is the frozen initial baseline; apply additive migrations too.
+    for (const migration of readMigrationFiles({ migrationsFolder: "./drizzle" }).slice(1)) {
+      for (const statement of migration.sql) await pool.query(statement);
+    }
     await pool.query(`
       INSERT INTO users(id,email,password_hash,email_verified_at) VALUES
         ($1,'one@example.test','synthetic',now()),($2,'two@example.test','synthetic',now());`, [id(1), id(2)]);

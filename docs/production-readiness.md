@@ -113,6 +113,43 @@ docker rm -f tradeflow-migration-tests
 
 Without `MIGRATION_TEST_ADMIN_URL`, these database integration tests are skipped and the ordinary unit tests still run. Canonical SQL is used only to create the disposable existing-installation fixture, with SQL errors propagated. Tests invoke the real `npm run db:migrate` command, preserve synthetic invoices and both `is_called` sequence states, verify no-op reruns, reject schema/history drift, serialize concurrent migrators, and prove transaction rollback/non-zero exit on an injected SQL failure.
 
+### Recurring generation identity (H07)
+
+Migration `0001_recurring_generation_identity` adds nullable `invoices.recurring_template_id`
+and `invoices.recurring_period`, a template foreign key, a unique template/period index,
+and a check requiring both identity fields together. It does not backfill or change old
+invoice values or reset invoice numbering. `supabase/schema.sql` remains the frozen
+initial adoption fixture; it is not the latest schema. Use the migration runner to
+apply subsequent migrations after adoption.
+
+Before eventually releasing this change, validate a restored production copy and inspect
+past recurring invoice duplicates and each template's next date. Historical invoices lack
+reliable period metadata, so this migration deliberately does not infer identities or
+repair past duplicates. Follow the existing backup/adoption procedure above, stop old
+application instances from generating invoices, run `npm run db:migrate`, then rerun it
+to verify zero pending migrations before starting the updated application. Old application
+instances do not supply generation identities and must not remain active during rollout.
+No production commands were executed as part of H07 validation.
+
+The UI submits the template ID plus the displayed next invoice date. Replays return the
+same invoice; a refreshed next date permits deliberate generation of the following period.
+Missing/invalid or unavailable dates fail closed. Older open tabs may need refreshing.
+If a generated invoice was explicitly deleted through the existing invoice flow, replaying
+its old period fails rather than generating another period. Templates linked to generated
+invoices cannot be deleted while those references exist. The additive index/constraints
+can lock the invoice table during migration; schedule the migration appropriately.
+
+Focused disposable PostgreSQL 17 validation (never use production credentials):
+
+```bash
+RECURRING_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h07_test_admin \
+  npm test -- tests/recurring-generation.test.ts
+```
+
+The test server must be disposable. The suite invokes the real migration command, creates
+isolated databases, exercises simultaneous calls on separate connections, retries,
+rollback, subsequent periods, tenant isolation and database uniqueness, then removes its fixtures.
+
 ## Monitoring
 
 Configure alerts for:

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { logActivityEvent } from "@/lib/activity";
 import { requirePaidBusiness } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -155,52 +155,72 @@ export async function updateRecurringInvoiceTemplateStatus(
   }
 }
 
-export async function createInvoiceFromRecurringTemplate(templateId: string) {
+export async function createInvoiceFromRecurringTemplate(
+  templateId: string,
+  intendedPeriod: string
+) {
   const business = await requirePaidBusiness();
 
   try {
-    const [template] = await db
-      .select()
-      .from(recurringInvoiceTemplates)
-      .where(
-        and(
+    const intent = z.object({
+      templateId: z.string().uuid(),
+      period: z.string().date()
+    }).safeParse({ templateId, period: intendedPeriod });
+    if (!intent.success) {
+      return { error: true, message: "Refresh recurring invoices and choose a valid billing period" };
+    }
+
+    const result = await db.transaction(async (tx) => {
+      // Lock before reading the mutable date. The caller's period remains stable
+      // across concurrent requests and retries, even after this template advances.
+      const [template] = await tx
+        .select()
+        .from(recurringInvoiceTemplates)
+        .where(and(
           eq(recurringInvoiceTemplates.businessId, business.id),
-          eq(recurringInvoiceTemplates.id, templateId)
-        )
-      )
-      .limit(1);
+          eq(recurringInvoiceTemplates.id, intent.data.templateId)
+        ))
+        .limit(1)
+        .for("update");
 
-    if (!template) {
-      return { error: true, message: "Recurring invoice not found" };
-    }
+      if (!template) throw new Error("Recurring invoice not found");
 
-    if (template.status !== "active") {
-      return { error: true, message: "Recurring invoice is paused" };
-    }
+      const [existingInvoice] = await tx
+        .select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+        .from(invoices)
+        .where(and(
+          eq(invoices.businessId, business.id),
+          eq(invoices.recurringTemplateId, template.id),
+          eq(invoices.recurringPeriod, intent.data.period)
+        ))
+        .limit(1);
 
-    const dueDate = addDays(template.nextInvoiceDate, template.paymentTermsDays);
-    const nextInvoiceDate = advanceDate(
-      template.nextInvoiceDate,
-      template.frequency
-    );
+      // Replays also work if the template has since been paused or advanced again.
+      if (existingInvoice) return { invoice: existingInvoice, template, created: false };
+      if (template.status !== "active") throw new Error("Recurring invoice is paused");
+      if (template.nextInvoiceDate !== intent.data.period) {
+        throw new Error("This billing period is no longer available. Refresh recurring invoices.");
+      }
 
-    const invoice = await db.transaction(async (tx) => {
-      const [createdInvoice] = await tx
+      const dueDate = addDays(template.nextInvoiceDate, template.paymentTermsDays);
+      const nextInvoiceDate = advanceDate(template.nextInvoiceDate, template.frequency);
+      // The unique template/period identity is the durable claim. It commits or
+      // rolls back together with the invoice, items, and template advancement.
+      const [invoice] = await tx
         .insert(invoices)
         .values({
           businessId: business.id,
           customerId: template.customerId,
+          recurringTemplateId: template.id,
+          recurringPeriod: intent.data.period,
           status: "draft",
           total: template.total,
           dueDate
         })
-        .returning({
-          id: invoices.id,
-          invoiceNumber: invoices.invoiceNumber
-        });
+        .returning({ id: invoices.id, invoiceNumber: invoices.invoiceNumber });
 
       await tx.insert(invoiceItems).values({
-        invoiceId: createdInvoice.id,
+        invoiceId: invoice.id,
         description: template.description,
         quantity: 1,
         price: template.total,
@@ -210,18 +230,24 @@ export async function createInvoiceFromRecurringTemplate(templateId: string) {
       await tx
         .update(recurringInvoiceTemplates)
         .set({ nextInvoiceDate })
-        .where(eq(recurringInvoiceTemplates.id, template.id));
+        .where(and(
+          eq(recurringInvoiceTemplates.businessId, business.id),
+          eq(recurringInvoiceTemplates.id, template.id)
+        ));
 
-      return createdInvoice;
+      return { invoice, template, created: true };
     });
 
-    await logActivityEvent({
-      businessId: business.id,
-      customerId: template.customerId,
-      invoiceId: invoice.id,
-      type: "recurring_invoice.invoice_created",
-      description: `Invoice ${invoice.invoiceNumber} was created from recurring invoice ${template.name}.`
-    });
+    const { invoice, template, created } = result;
+    if (created) {
+      await logActivityEvent({
+        businessId: business.id,
+        customerId: template.customerId,
+        invoiceId: invoice.id,
+        type: "recurring_invoice.invoice_created",
+        description: `Invoice ${invoice.invoiceNumber} was created from recurring invoice ${template.name}.`
+      });
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/invoices");
@@ -229,7 +255,7 @@ export async function createInvoiceFromRecurringTemplate(templateId: string) {
 
     return {
       error: false,
-      message: `Invoice ${invoice.invoiceNumber} created`,
+      message: `Invoice ${invoice.invoiceNumber} ${created ? "created" : "already created"}`,
       invoiceId: invoice.id
     };
   } catch (error) {

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -285,6 +286,11 @@ export const invoices = pgTable(
     quoteId: uuid("quote_id").references(() => quotes.id, {
       onDelete: "set null"
     }),
+    recurringTemplateId: uuid("recurring_template_id").references(
+      () => recurringInvoiceTemplates.id,
+      { onDelete: "restrict" }
+    ),
+    recurringPeriod: date("recurring_period", { mode: "string" }),
     invoiceNumber: text("invoice_number")
       .notNull()
       .unique()
@@ -308,7 +314,15 @@ export const invoices = pgTable(
     customerIdx: index("invoices_customer_id_idx").on(table.customerId),
     dueDateIdx: index("invoices_due_date_idx").on(table.dueDate),
     statusIdx: index("invoices_status_idx").on(table.status),
-    quoteIdx: uniqueIndex("invoices_quote_id_idx").on(table.quoteId)
+    quoteIdx: uniqueIndex("invoices_quote_id_idx").on(table.quoteId),
+    recurringPeriodIdx: uniqueIndex("invoices_recurring_template_period_idx").on(
+      table.recurringTemplateId,
+      table.recurringPeriod
+    ),
+    recurringIdentityCheck: check(
+      "invoices_recurring_identity_check",
+      sql`(${table.recurringTemplateId} is null) = (${table.recurringPeriod} is null)`
+    )
   })
 );
 

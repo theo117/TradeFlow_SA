@@ -39,17 +39,19 @@ export function RecurringInvoicesTable({
 
   async function handleCreateInvoice(template: RecurringInvoiceTemplate) {
     setPendingId(template.id);
-    const result = await createInvoiceFromRecurringTemplate(template.id);
-
-    if (result.error) {
-      setToast({ kind: "error", message: result.message });
+    try {
+      const result = await createInvoiceFromRecurringTemplate(
+        template.id,
+        template.next_invoice_date
+      );
+      setToast({ kind: result.error ? "error" : "success", message: result.message });
+      if (!result.error) router.refresh();
+    } catch {
+      // Keep the displayed period so an uncertain network response can be retried.
+      setToast({ kind: "error", message: "Unable to confirm invoice creation. Retry this billing period." });
+    } finally {
       setPendingId(null);
-      return;
     }
-
-    setToast({ kind: "success", message: result.message });
-    router.refresh();
-    setPendingId(null);
   }
 
   return (

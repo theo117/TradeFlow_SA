@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { Pool } from "pg";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { INITIAL_MIGRATION_HASH, INITIAL_MIGRATION_TIME } from "../scripts/migration-support";
 import snapshot from "../drizzle/meta/0000_snapshot.json";
@@ -12,6 +13,8 @@ import snapshot from "../drizzle/meta/0000_snapshot.json";
 const execute = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
 const adminUrl = process.env.MIGRATION_TEST_ADMIN_URL;
+const expectedHistory = readMigrationFiles({ migrationsFolder: path.join(root, "drizzle") })
+  .map((migration) => ({ hash: migration.hash, created_at: String(migration.folderMillis) }));
 
 // Explicitly opt in with a dedicated disposable local PostgreSQL 17 server.
 // No DATABASE_URL or real env files are read by this suite.
@@ -76,7 +79,10 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     const result: Record<string, unknown> = {};
     for (const key of Object.keys(snapshot.tables).sort()) {
       const table = key.slice("public.".length);
-      result[table] = (await query(url, `SELECT to_jsonb(t) AS row FROM public."${table}" t ORDER BY to_jsonb(t)::text`)).rows;
+      // Compare every original column: additive migrations may add nullable metadata.
+      const columns = Object.keys(snapshot.tables[key as keyof typeof snapshot.tables].columns)
+        .map((column) => `"${column}"`).join(", ");
+      result[table] = (await query(url, `SELECT to_jsonb(t) AS row FROM (SELECT ${columns} FROM public."${table}") t ORDER BY to_jsonb(t)::text`)).rows;
     }
     return result;
   }
@@ -94,6 +100,10 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
           '00000000-0000-0000-0000-000000000003',123.45,'2030-01-01');
       INSERT INTO invoice_items(invoice_id,description,quantity,price,subtotal)
         VALUES ('00000000-0000-0000-0000-000000000004','Preserve exactly',1,123.45,123.45);
+      INSERT INTO recurring_invoice_templates(id,business_id,customer_id,name,description,frequency,total,next_invoice_date)
+        VALUES ('00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000002',
+          '00000000-0000-0000-0000-000000000003','Preserve recurring template','Agreed amount',
+          'monthly',123.45,'2030-02-15');
     `);
   }
 
@@ -114,8 +124,8 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     expect(rerun.output).toContain("0 applied");
     expect(await rows(url)).toEqual(before);
     expect(await sequence(url)).toEqual(position);
-    expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations")).rows)
-      .toEqual([{ hash: INITIAL_MIGRATION_HASH, created_at: String(INITIAL_MIGRATION_TIME) }]);
+    expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at")).rows)
+      .toEqual(expectedHistory);
     expect((await query(url, "SELECT nextval('public.invoice_number_seq')::text AS value")).rows[0].value).toBe("1001");
   }, 30000);
 
@@ -136,13 +146,18 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
         CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint);`);
     }
     expect((await migrate(url, ["--baseline"])).code).toBe(0);
+    // Adoption records only the frozen initial migration; the normal command upgrades it.
+    expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at")).rows)
+      .toEqual([{ hash: INITIAL_MIGRATION_HASH, created_at: String(INITIAL_MIGRATION_TIME) }]);
     expect((await migrate(url)).code).toBe(0);
+    expect((await query(url, "SELECT recurring_template_id,recurring_period FROM invoices")).rows)
+      .toEqual([{ recurring_template_id: null, recurring_period: null }]);
     expect((await migrate(url)).output).toContain("0 applied");
     expect((await migrate(url, ["--baseline"])).output).toContain("no-op");
     expect(await rows(url)).toEqual(before);
     expect(await sequence(url)).toEqual(position);
-    expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations")).rows)
-      .toEqual([{ hash: INITIAL_MIGRATION_HASH, created_at: String(INITIAL_MIGRATION_TIME) }]);
+    expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at")).rows)
+      .toEqual(expectedHistory);
     const inserted = await query(url, `INSERT INTO invoices(business_id,customer_id,total,due_date)
       VALUES ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',10,'2030-01-02') RETURNING invoice_number`);
     expect(inserted.rows[0].invoice_number).toBe(called ? "INV-054322" : "INV-054321");
@@ -172,7 +187,7 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     const url = await database();
     const result = await Promise.all([migrate(url), migrate(url)]);
     expect(result.map((r) => r.code)).toEqual([0, 0]);
-    expect((await query(url, "SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations")).rows[0].count).toBe(1);
+    expect((await query(url, "SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations")).rows[0].count).toBe(expectedHistory.length);
     expect(await sequence(url)).toEqual([{ last_value: "1000", is_called: false }]);
   }, 30000);
 
