@@ -404,7 +404,7 @@ export const getCustomerDetail = cache(async (id: string) => {
     return null;
   }
 
-  const [quoteRows, invoiceRows, activity] = await Promise.all([
+  const [quoteRows, invoiceRows, activity, [invoiceSummary]] = await Promise.all([
     db
       .select({
         id: quotes.id,
@@ -429,11 +429,22 @@ export const getCustomerDetail = cache(async (id: string) => {
       .where(and(eq(invoices.businessId, business.id), eq(invoices.customerId, id)))
       .orderBy(desc(invoices.createdAt))
       .limit(10),
-    getCustomerActivity(id)
+    getCustomerActivity(id),
+    db
+      .select({
+        count: count(),
+        total: sql<string>`coalesce(sum(${invoices.total}), 0)::text`,
+        paid: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} = 'paid'), 0)::text`,
+        outstanding: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} <> 'paid'), 0)::text`,
+        overdue: sql<string>`coalesce(sum(${invoices.total}) filter (where ${invoices.status} = 'overdue'), 0)::text`
+      })
+      .from(invoices)
+      .where(and(eq(invoices.businessId, business.id), eq(invoices.customerId, id)))
   ]);
 
   return {
     customer,
+    invoiceSummary,
     quotes: quoteRows.map((row) => ({
       id: row.id,
       status: row.status,

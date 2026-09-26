@@ -5,11 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function currency(value: number) {
+export function currency(value: number | string) {
+  // Intl accepts decimal strings exactly; TypeScript's Intl signature omits strings.
+  // This assertion preserves the string at runtime, avoiding a lossy Number conversion.
   return new Intl.NumberFormat("en-ZA", {
     style: "currency",
     currency: "ZAR"
-  }).format(value);
+  }).format(value as number);
 }
 
 export function formatDate(value: string) {

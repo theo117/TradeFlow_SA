@@ -19,16 +19,7 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const { customer, quotes, invoices, activity } = detail;
-  const paidValue = invoices
-    .filter((invoice) => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
-  const outstandingValue = invoices
-    .filter((invoice) => invoice.status !== "paid")
-    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
-  const overdueValue = invoices
-    .filter((invoice) => invoice.status === "overdue")
-    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
+  const { customer, quotes, invoices, activity, invoiceSummary } = detail;
 
   return (
     <div className="space-y-6">
@@ -78,19 +69,17 @@ export default async function CustomerDetailPage({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Stat label="Quotes" value={quotes.length} />
-            <Stat label="Invoices" value={invoices.length} />
+            <Stat label="Invoices" value={invoiceSummary.count} />
             <Stat
               label="Lifetime value"
-              value={currency(
-                invoices.reduce((sum, invoice) => sum + Number(invoice.total), 0)
-              )}
+              value={currency(invoiceSummary.total)}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Stat label="Paid" value={currency(paidValue)} />
-            <Stat label="Outstanding" value={currency(outstandingValue)} />
-            <Stat label="Overdue" value={currency(overdueValue)} />
+            <Stat label="Paid" value={currency(invoiceSummary.paid)} />
+            <Stat label="Outstanding" value={currency(invoiceSummary.outstanding)} />
+            <Stat label="Overdue" value={currency(invoiceSummary.overdue)} />
           </div>
 
           <div className="flex flex-wrap gap-2">
