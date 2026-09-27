@@ -310,6 +310,51 @@ RESET_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h14_test_admin \
   npm test -- tests/password-reset-integration.test.ts
 ```
 
+## Billing intentionally disabled
+
+Keep `BILLING_ENFORCEMENT=off`. It is the shared master opt-in for the Next.js
+billing entry points/access rules and Java billing entry points. Missing, blank,
+malformed and non-exact values remain disabled; only exact `on` enables billing.
+Configured PayFast credentials or plan prices alone do not enable anything.
+The example environment and CI configuration retain `off`; real environment
+files are not modified by this change.
+
+While disabled:
+
+- Next.js `GET /api/payfast/checkout` and `POST /api/payfast/notify` return 404
+  with `Cache-Control: no-store` before authentication, body parsing, signature
+  validation, rate-limit/audit writes, database access or network calls.
+- The checkout server action returns to `/dashboard/billing`; the billing page
+  does not render the checkout panel, payment buttons or checkout forms.
+- Billing access checks allow authenticated users regardless of expired trial,
+  cancelled, past-due or expired subscription dates. `KEY_FEATURE_TRIAL_LOCK`
+  only applies when billing itself is enabled. Authentication and ownership
+  checks still apply. Stored subscription statuses/dates are not rewritten.
+- Java does not register `/api/webhooks/payfast` or `PaymentVerificationJob`.
+  The job's existing 15-minute schedule therefore cannot change subscriptions.
+  The condition is checked at application startup; restart/rebuild is needed
+  when deploying these source changes or changing the runtime setting.
+
+Checked production Compose configuration runs Next.js and migrations, not Java.
+Java security permits unauthenticated `/api/webhooks/**` when its application is
+run independently, so its webhook and scheduler are explicitly guarded too.
+No other automatic billing writer/scheduler was found in application source,
+scripts or CI. Recurring customer-invoice generation is separate and unchanged.
+
+The existing payment calculations, signatures, validation, ITN processing and
+subscription transition code remain dormant and unchanged. H12/H13 were not
+implemented. Do not enable billing without a separate authorized payment review.
+This flag does not cancel provider-side subscriptions or prevent charges from
+previously created external payment instructions. No PayFast account, live VPS
+configuration or production database was accessed to verify those external states.
+
+Verification covers disabled routes with configured synthetic credentials/prices,
+zero DB/network calls, absent checkout UI, authenticated access with expired
+billing states, and Java bean absence. The full auth/financial regression suite
+uses disposable PostgreSQL 17. Java condition tests run in an isolated build copy;
+the local Java 21 override is test-only and does not change the Java 25 project
+configuration. No schema migration is required.
+
 ## Monitoring
 
 Configure alerts for:

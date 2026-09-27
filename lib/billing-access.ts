@@ -7,7 +7,15 @@ type AccessControlledBusiness = Pick<
   "subscription_status" | "current_period_end" | "trial_ends_at" | "created_at"
 >;
 
+// Billing is dormant unless explicitly enabled. Credentials and plan amounts
+// alone must never activate payment entry points or subscription lockouts.
+export function isBillingEnabled() {
+  return process.env.BILLING_ENFORCEMENT === "on";
+}
+
 export function hasBillingAccess(business: AccessControlledBusiness) {
+  if (!isBillingEnabled()) return true;
+
   if (
     process.env.KEY_FEATURE_TRIAL_LOCK !== "off" &&
     business.subscription_status === "trialing"
@@ -15,10 +23,6 @@ export function hasBillingAccess(business: AccessControlledBusiness) {
     return hasFutureDate(
       business.trial_ends_at ?? getFallbackTrialEnd(business.created_at)
     );
-  }
-
-  if (process.env.BILLING_ENFORCEMENT !== "on") {
-    return true;
   }
 
   if (business.subscription_status === "active") {

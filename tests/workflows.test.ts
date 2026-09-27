@@ -203,8 +203,8 @@ describe("billing access", () => {
     );
   });
 
-  it("blocks expired trialing businesses when the key feature lock is on", () => {
-    process.env.BILLING_ENFORCEMENT = "off";
+  it("blocks expired trialing businesses when billing and the key feature lock are on", () => {
+    process.env.BILLING_ENFORCEMENT = "on";
     process.env.KEY_FEATURE_TRIAL_LOCK = "on";
 
     expect(

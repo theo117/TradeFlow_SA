@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isBillingEnabled } from "@/lib/billing-access";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { businesses, payfastItnEvents } from "@/lib/db/schema";
@@ -32,6 +33,10 @@ function parsePlan(value: string | null): BillingPlan | null {
 }
 
 export async function POST(request: Request) {
+  if (!isBillingEnabled()) {
+    return new NextResponse("Billing is disabled", { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
+
   const startedAt = Date.now();
   const requestContext = getRequestLogContext(request);
   const body = await request.text();

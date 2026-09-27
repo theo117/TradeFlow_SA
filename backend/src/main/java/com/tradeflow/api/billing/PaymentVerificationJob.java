@@ -1,5 +1,7 @@
 package com.tradeflow.api.billing;
 
+import org.springframework.context.annotation.Conditional;
+
 import com.tradeflow.api.business.Business;
 import com.tradeflow.api.business.BusinessRepository;
 import java.time.Instant;
@@ -8,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@Conditional(BillingEnabledCondition.class)
 public class PaymentVerificationJob {
   private final BusinessRepository businesses;
 

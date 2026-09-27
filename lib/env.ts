@@ -1,3 +1,5 @@
+import { isBillingEnabled } from "@/lib/billing-access";
+
 const REQUIRED_PRODUCTION_ENV = [
   "DATABASE_URL",
   "AUTH_SECRET",
@@ -76,7 +78,7 @@ export function assertProductionEnv() {
   }
 
   // Billing validation
-  if (process.env.BILLING_ENFORCEMENT === "on") {
+  if (isBillingEnabled()) {
     const billingVars = [
       "PAYFAST_MERCHANT_ID",
       "PAYFAST_MERCHANT_KEY",

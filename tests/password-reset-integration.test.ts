@@ -21,7 +21,7 @@ vi.mock("@/lib/db", () => ({ get db() { return state.db; } }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ cookie: state.cookie, host: "localhost:3000", "x-forwarded-proto": "http" }) }));
 
 import { handlers, auth } from "../auth";
-import { requireUser } from "../lib/auth";
+import { requireUser, requirePaidBusiness } from "../lib/auth";
 import * as passwords from "../lib/password";
 import { createPasswordResetToken, resetPasswordWithToken } from "../lib/password-reset";
 import DashboardLayout from "../app/dashboard/layout";
@@ -67,6 +67,7 @@ describe.skipIf(!adminUrl)("password reset and session revocation (disposable Po
   });
   afterEach(async () => {
     vi.restoreAllMocks();
+    vi.stubEnv("BILLING_ENFORCEMENT", "off");
     if (client) await client.end(); if (pool) await pool.end();
     if (name) {
       await vi.waitFor(async () => expect((await admin.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=$1", [name])).rows[0].count).toBe(0), { timeout: 5000, interval: 20 });
@@ -149,6 +150,7 @@ describe.skipIf(!adminUrl)("password reset and session revocation (disposable Po
   });
 
   it("rejects old cookies on protected pages/APIs after reset and permits a new login", async () => {
+    vi.stubEnv("BILLING_ENFORCEMENT", "on");
     const first = await login(); const second = await login();
     expect(first.jar.has(cookieName)).toBe(true); state.cookie = first.cookie;
     expect((await requireUser()).id).toBe(id(1));
@@ -237,6 +239,16 @@ describe.skipIf(!adminUrl)("password reset and session revocation (disposable Po
     await expect(requireUser()).rejects.toMatchObject({ digest: expect.stringContaining("email_not_verified") });
     const reset = await createPasswordResetToken(id(1)); await resetPasswordWithToken({ token: reset.token, password: newPassword });
     state.cookie = (await login(newPassword)).cookie; expect((await requireUser()).id).toBe(id(1));
+  });
+
+  it("keeps authenticated access available with disabled billing and expired account dates", async () => {
+    vi.stubEnv("BILLING_ENFORCEMENT", "off"); vi.stubEnv("KEY_FEATURE_TRIAL_LOCK", "on");
+    state.cookie = (await login()).cookie;
+    for (const status of ["trialing", "active", "past_due", "cancelled"]) {
+      await pool.query("UPDATE businesses SET subscription_status=$1,trial_ends_at='2000-01-01',current_period_end='2000-01-01' WHERE owner_id=$2", [status,id(1)]);
+      expect((await requirePaidBusiness()).id).toBe(id(3));
+      expect((await invoiceExport()).status).toBe(200);
+    }
   });
 
   it("does not grant a current session to an old-password login racing with reset", async () => {

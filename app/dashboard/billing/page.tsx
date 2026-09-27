@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, Mail, MessageCircle, Sparkles } from "lucide-react";
 import { getAccessState, requireBusiness } from "@/lib/auth";
+import { isBillingEnabled } from "@/lib/billing-access";
 import { getPlanAmount } from "@/lib/payfast";
 import { currency, formatDate } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -21,8 +22,9 @@ export default async function BillingPage({
 }) {
   const business = await requireBusiness();
   const params = await searchParams;
-  const starterAmount = getOptionalPlanAmount("starter");
-  const proAmount = getOptionalPlanAmount("pro");
+  const billingEnabled = isBillingEnabled();
+  const starterAmount = billingEnabled ? getOptionalPlanAmount("starter") : null;
+  const proAmount = billingEnabled ? getOptionalPlanAmount("pro") : null;
   const accessState = getAccessState(business);
   const contactEmail =
     process.env.CONTINUATION_CONTACT_EMAIL ?? "support@tradeflowsa.co.za";
@@ -31,7 +33,7 @@ export default async function BillingPage({
   const contactBody = encodeURIComponent(
     `Hi, I want to keep using TradeFlow SA for ${business.name}.`
   );
-  const accessLabel =
+  const accessLabel = !billingEnabled ? "Active" :
     accessState.hasAccess && business.subscription_status === "active"
       ? "Active"
       : accessState.hasAccess && business.subscription_status === "trialing"
@@ -54,7 +56,9 @@ export default async function BillingPage({
           </p>
           <h1 className="mt-1 text-3xl font-semibold text-ink">Plan and billing</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Your key workflows are available for {accessState.trialDays} days. Contact us if you want to keep using TradeFlow SA after that.
+            {billingEnabled
+              ? `Your key workflows are available for ${accessState.trialDays} days. Contact us if you want to keep using TradeFlow SA after that.`
+              : "Billing is disabled. Your workspace remains available."}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
@@ -143,6 +147,7 @@ export default async function BillingPage({
           </div>
         </section>
 
+        {billingEnabled ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-3">
             <Sparkles className="mt-0.5 h-5 w-5 text-brand-600" />
@@ -187,6 +192,7 @@ export default async function BillingPage({
             </div>
           </div>
         </section>
+        ) : null}
       </div>
     </div>
   );
