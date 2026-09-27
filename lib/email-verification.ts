@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailVerificationTokens, users } from "@/lib/db/schema";
 import { logInfo } from "@/lib/observability";
@@ -12,6 +12,9 @@ function hashToken(token: string) {
 }
 
 function getEmailProviderConfig() {
+  // Honor an explicit opt-out; preserve existing credential-based delivery
+  // when the optional flag is unset.
+  if (process.env.EMAIL_ENABLED === "false") return null;
   const resendApiKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
 
@@ -57,41 +60,23 @@ export async function createEmailVerificationToken(userId: string) {
 }
 
 export async function verifyEmailToken(token: string) {
-  const tokenHash = hashToken(token);
-  const [verificationToken] = await db
-    .select()
-    .from(emailVerificationTokens)
-    .where(
-      and(
-        eq(emailVerificationTokens.tokenHash, tokenHash),
-        isNull(emailVerificationTokens.usedAt)
-      )
-    )
-    .limit(1);
-
-  if (!verificationToken) {
-    return { ok: false, reason: "invalid" as const };
-  }
-
-  if (new Date(verificationToken.expiresAt).getTime() < Date.now()) {
-    return { ok: false, reason: "expired" as const };
-  }
-
-  const now = new Date().toISOString();
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(users)
-      .set({ emailVerifiedAt: now })
-      .where(eq(users.id, verificationToken.userId));
-
-    await tx
-      .update(emailVerificationTokens)
-      .set({ usedAt: now })
-      .where(eq(emailVerificationTokens.id, verificationToken.id));
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return { ok: false, reason: "invalid" as const };
+  return db.transaction(async (tx) => {
+    const [account] = await tx.select({ id: users.id }).from(users)
+      .innerJoin(emailVerificationTokens, eq(emailVerificationTokens.userId, users.id))
+      .where(eq(emailVerificationTokens.tokenHash, hashToken(token)))
+      .for("update", { of: users });
+    if (!account) return { ok: false, reason: "invalid" as const };
+    const [claimed] = await tx.update(emailVerificationTokens).set({ usedAt: sql`clock_timestamp()` })
+      .where(and(eq(emailVerificationTokens.tokenHash, hashToken(token)),
+        eq(emailVerificationTokens.userId, account.id), isNull(emailVerificationTokens.usedAt),
+        sql`${emailVerificationTokens.expiresAt} > clock_timestamp()`))
+      .returning({ userId: emailVerificationTokens.userId });
+    if (!claimed) return { ok: false, reason: "invalid" as const };
+    await tx.update(users).set({ emailVerifiedAt: sql`clock_timestamp()` })
+      .where(and(eq(users.id, claimed.userId), isNull(users.emailVerifiedAt)));
+    return { ok: true, reason: "verified" as const };
   });
-
-  return { ok: true, reason: "verified" as const };
 }
 
 export async function sendEmailVerification({
@@ -104,9 +89,7 @@ export async function sendEmailVerification({
   const emailProvider = getEmailProviderConfig();
 
   if (!emailProvider) {
-    logInfo("Email verification link generated for local development", {
-      verificationUrl
-    });
+    logInfo("Email verification email is disabled");
     return;
   }
 

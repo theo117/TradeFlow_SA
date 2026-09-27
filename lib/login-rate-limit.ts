@@ -1,105 +1,42 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { loginRateLimits } from "@/lib/db/schema";
-import { logWarn } from "@/lib/observability";
 
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Outcome<T> = { user: T } | { error: "credentials" | "email_not_verified" };
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-const BLOCK_MS = 15 * 60 * 1000;
 
 export function buildLoginThrottleKey(email: string, ip: string | null) {
   return `${email.toLowerCase()}::${ip ?? "unknown"}`;
 }
 
-function isMissingRelationError(error: unknown) {
-  return (
-    error instanceof Error &&
-    (error.message.includes('relation "login_rate_limits" does not exist') ||
-      error.message.includes('column "blocked_until" does not exist') ||
-      error.message.includes('column "attempt_count" does not exist'))
-  );
-}
-
-export async function isLoginBlocked(key: string) {
-  try {
-    const [row] = await db
-      .select({ blockedUntil: loginRateLimits.blockedUntil })
-      .from(loginRateLimits)
-      .where(eq(loginRateLimits.identifier, key))
-      .limit(1);
-
-    return Boolean(
-      row?.blockedUntil && new Date(row.blockedUntil).getTime() > Date.now()
-    );
-  } catch (error) {
-    if (isMissingRelationError(error)) {
-      logWarn("Login rate limit table is missing; allowing login flow to continue.");
-      return false;
-    }
-
-    throw error;
-  }
-}
-
-export async function recordFailedLogin(key: string) {
-  try {
+// Use an account-wide key at the credentials boundary: client-controlled proxy
+// headers must not provide an alternate login budget. Malformed input shares a
+// bounded key. Serialize the check, validation and update across processes.
+export async function attemptLogin<T>(key: string, validate: (tx: Transaction) => Promise<Outcome<T>>): Promise<Outcome<T> | { error: "too_many_attempts" }> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`auth.login:${key}`}, 0))`);
     const now = Date.now();
-    const [row] = await db
-      .select()
-      .from(loginRateLimits)
-      .where(eq(loginRateLimits.identifier, key))
-      .limit(1);
-
-    if (!row) {
-      await db.insert(loginRateLimits).values({
-        identifier: key,
-        attemptCount: 1,
-        windowStartedAt: new Date(now).toISOString(),
-        updatedAt: new Date(now).toISOString()
-      });
-      return;
+    const [row] = await tx.select().from(loginRateLimits).where(eq(loginRateLimits.identifier, key)).limit(1);
+    if (row?.blockedUntil && new Date(row.blockedUntil).getTime() > now) return { error: "too_many_attempts" as const };
+    const result = await validate(tx);
+    if ("user" in result) {
+      await tx.delete(loginRateLimits).where(eq(loginRateLimits.identifier, key));
+      return result;
     }
-
-    const windowStartedAt = new Date(row.windowStartedAt).getTime();
-    const withinWindow = windowStartedAt + WINDOW_MS > now;
+    const withinWindow = row && new Date(row.windowStartedAt).getTime() + WINDOW_MS > now;
     const attemptCount = withinWindow ? row.attemptCount + 1 : 1;
-    const blockedUntil =
-      attemptCount >= MAX_ATTEMPTS
-        ? new Date(now + BLOCK_MS).toISOString()
-        : row.blockedUntil && new Date(row.blockedUntil).getTime() > now
-          ? row.blockedUntil
-          : null;
-
-    await db
-      .update(loginRateLimits)
-      .set({
-        attemptCount,
-        windowStartedAt: withinWindow
-          ? row.windowStartedAt
-          : new Date(now).toISOString(),
-        blockedUntil,
-        updatedAt: new Date(now).toISOString()
-      })
-      .where(eq(loginRateLimits.identifier, key));
-  } catch (error) {
-    if (isMissingRelationError(error)) {
-      logWarn("Login rate limit table is missing; failed login was not recorded.");
-      return;
-    }
-
-    throw error;
-  }
-}
-
-export async function clearFailedLogin(key: string) {
-  try {
-    await db.delete(loginRateLimits).where(eq(loginRateLimits.identifier, key));
-  } catch (error) {
-    if (isMissingRelationError(error)) {
-      logWarn("Login rate limit table is missing; clear failed login was skipped.");
-      return;
-    }
-
-    throw error;
-  }
+    await tx.insert(loginRateLimits).values({
+      identifier: key, attemptCount,
+      windowStartedAt: withinWindow ? row.windowStartedAt : new Date(now).toISOString(),
+      blockedUntil: attemptCount >= MAX_ATTEMPTS ? new Date(now + WINDOW_MS).toISOString() : null,
+      updatedAt: new Date(now).toISOString()
+    }).onConflictDoUpdate({ target: loginRateLimits.identifier, set: {
+      attemptCount, windowStartedAt: withinWindow ? row.windowStartedAt : new Date(now).toISOString(),
+      blockedUntil: attemptCount >= MAX_ATTEMPTS ? new Date(now + WINDOW_MS).toISOString() : null,
+      updatedAt: new Date(now).toISOString()
+    } });
+    return result;
+  });
 }

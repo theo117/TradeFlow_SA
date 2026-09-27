@@ -22,6 +22,9 @@ function getAppUrl() {
 }
 
 function getEmailProviderConfig() {
+  // Honor an explicit opt-out; preserve existing credential-based delivery
+  // when the optional flag is unset.
+  if (process.env.EMAIL_ENABLED === "false") return null;
   const resendApiKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
 
@@ -67,9 +70,7 @@ export async function sendPasswordResetEmail({
   const emailProvider = getEmailProviderConfig();
 
   if (!emailProvider) {
-    logInfo("Password reset link generated for local development", {
-      resetUrl
-    });
+    logInfo("Password reset email is disabled");
     return;
   }
 
@@ -137,7 +138,6 @@ export async function resetPasswordWithToken({
     const passwordHash = await hashPassword(password);
     await tx.update(users).set({
       passwordHash,
-      emailVerifiedAt: new Date().toISOString(),
       sessionVersion: sql`${users.sessionVersion} + 1`
     }).where(eq(users.id, claimed.userId));
 

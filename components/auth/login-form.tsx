@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { loginErrorMessage } from "@/lib/auth-messages";
 import { Input } from "@/components/ui/input";
 
 export function LoginForm({
@@ -26,7 +28,7 @@ export function LoginForm({
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
-    const redirectTo = next && next.startsWith("/") ? next : "/dashboard";
+    const redirectTo = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/dashboard";
 
     try {
       const result = await Promise.race([
@@ -43,7 +45,7 @@ export function LoginForm({
 
       if (!result || result.error || !result.ok) {
         setError(
-          "The email or password does not match. Please check your password and try again."
+          loginErrorMessage(result?.code ?? result?.error ?? "unavailable")!
         );
         setPending(false);
         return;
@@ -69,7 +71,7 @@ export function LoginForm({
     } catch (error) {
       setError(
         error instanceof Error && error.message === "timeout"
-          ? "Login request timed out. This usually means the live auth endpoint is failing."
+          ? "Login request timed out. Please try again."
           : "Login failed. Please try again."
       );
       setPending(false);
@@ -109,6 +111,10 @@ export function LoginForm({
           {pending ? "Logging in..." : "Login"}
         </Button>
       </form>
+      <div className="flex flex-wrap gap-4 text-sm text-brand-700">
+        <Link href="/forgot-password">Forgot password?</Link>
+        <Link href="/verify-email">Verify email</Link>
+      </div>
     </>
   );
 }

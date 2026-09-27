@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { rateLimits } from "@/lib/db/schema";
 import { logWarn } from "@/lib/observability";
@@ -9,6 +9,7 @@ type RateLimitOptions = {
   limit: number;
   windowMs: number;
   blockMs?: number;
+  failClosed?: boolean;
 };
 
 export type RateLimitResult = {
@@ -35,13 +36,14 @@ export async function consumeRateLimit({
   key,
   limit,
   windowMs,
-  blockMs = windowMs
+  blockMs = windowMs,
+  failClosed = false
 }: RateLimitOptions): Promise<RateLimitResult> {
   const identifier = buildRateLimitKey(namespace, [key]);
-  const now = Date.now();
-
-  try {
-    const [row] = await db
+  type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+  async function consume(store: Transaction | typeof db): Promise<RateLimitResult> {
+    const now = Date.now();
+    const [row] = await store
       .select()
       .from(rateLimits)
       .where(eq(rateLimits.identifier, identifier))
@@ -58,7 +60,7 @@ export async function consumeRateLimit({
     }
 
     if (!row) {
-      await db.insert(rateLimits).values({
+      await store.insert(rateLimits).values({
         identifier,
         attemptCount: 1,
         windowStartedAt: new Date(now).toISOString(),
@@ -73,7 +75,7 @@ export async function consumeRateLimit({
     const blocked = attemptCount > limit;
     const blockedUntil = blocked ? new Date(now + blockMs).toISOString() : null;
 
-    await db
+    await store
       .update(rateLimits)
       .set({
         attemptCount,
@@ -90,8 +92,19 @@ export async function consumeRateLimit({
       remaining: blocked ? 0 : Math.max(limit - attemptCount, 0),
       retryAfterSeconds: blocked ? Math.ceil(blockMs / 1000) : undefined
     };
+  }
+  try {
+    if (failClosed) {
+      // Auth actions opt into serialized, fail-closed consumption. Other users
+      // of this helper retain their existing behavior.
+      return await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${identifier}, 0))`);
+        return consume(tx);
+      });
+    }
+    return await consume(db);
   } catch (error) {
-    if (isMissingRelationError(error)) {
+    if (!failClosed && isMissingRelationError(error)) {
       logWarn("Rate limit table is missing; request was allowed.", {
         namespace
       });

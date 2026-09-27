@@ -23,6 +23,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers({ cookie: stat
 import { handlers, auth } from "../auth";
 import { requireUser, requirePaidBusiness } from "../lib/auth";
 import * as passwords from "../lib/password";
+import { createEmailVerificationToken, verifyEmailToken } from "../lib/email-verification";
 import { createPasswordResetToken, resetPasswordWithToken } from "../lib/password-reset";
 import DashboardLayout from "../app/dashboard/layout";
 import { GET as checkout } from "../app/api/payfast/checkout/route";
@@ -227,7 +228,7 @@ describe.skipIf(!adminUrl)("password reset and session revocation (disposable Po
     expect((await account()).session_version).toBe(1);
   });
 
-  it("preserves normal login/logout, JWT expiry, and existing unverified-user rules", async () => {
+  it("preserves normal login/logout and JWT expiry while requiring independent email verification", async () => {
     const current = await login(); state.cookie = current.cookie; expect((await requireUser()).id).toBe(id(1));
     const csrfToken = await csrf(current.jar);
     const response = await handlers.POST(new NextRequest(`${baseUrl}/api/auth/signout`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie: cookieHeader(current.jar) }, body: new URLSearchParams({ csrfToken }).toString() }));
@@ -236,10 +237,15 @@ describe.skipIf(!adminUrl)("password reset and session revocation (disposable Po
     expect(await session(`${cookieName}=${expired}`)).toBeNull();
     await pool.query("UPDATE users SET email_verified_at=null WHERE id=$1", [id(1)]);
     state.cookie = (await login()).cookie;
-    await expect(requireUser()).rejects.toMatchObject({ digest: expect.stringContaining("email_not_verified") });
+    expect(await auth()).toBeNull();
+    await expect(requireUser()).rejects.toMatchObject({ digest: expect.stringContaining("/login") });
     const reset = await createPasswordResetToken(id(1)); await resetPasswordWithToken({ token: reset.token, password: newPassword });
+    expect((await account()).email_verified_at).toBeNull();
+    expect(await session((await login(newPassword)).cookie)).toBeNull();
+    const verification = await createEmailVerificationToken(id(1));
+    expect((await verifyEmailToken(verification.token)).ok).toBe(true);
     state.cookie = (await login(newPassword)).cookie; expect((await requireUser()).id).toBe(id(1));
-  });
+  }, 15000);
 
   it("keeps authenticated access available with disabled billing and expired account dates", async () => {
     vi.stubEnv("BILLING_ENFORCEMENT", "off"); vi.stubEnv("KEY_FEATURE_TRIAL_LOCK", "on");

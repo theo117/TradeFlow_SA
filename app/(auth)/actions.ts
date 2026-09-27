@@ -2,7 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { AuthError } from "next-auth";
+import { AuthError, CredentialsSignin } from "next-auth";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { signIn, signOut } from "@/auth";
@@ -12,7 +12,8 @@ import { businesses, users } from "@/lib/db/schema";
 import { logAuditEvent } from "@/lib/audit";
 import {
   createEmailVerificationToken,
-  sendEmailVerification
+  sendEmailVerification,
+  verifyEmailToken
 } from "@/lib/email-verification";
 import { logError, logInfo, logWarn } from "@/lib/observability";
 import {
@@ -20,17 +21,10 @@ import {
   resetPasswordWithToken,
   sendPasswordResetEmail
 } from "@/lib/password-reset";
-import {
-  buildLoginThrottleKey,
-  clearFailedLogin,
-  isLoginBlocked,
-  recordFailedLogin
-} from "@/lib/login-rate-limit";
 import { buildRateLimitKey, consumeRateLimit } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/password";
 import {
   forgotPasswordSchema,
-  loginSchema,
   registerSchema,
   resetPasswordSchema
 } from "@/lib/validations";
@@ -63,10 +57,11 @@ async function enforceAnonymousActionLimit({
 }) {
   const result = await consumeRateLimit({
     namespace: `auth.${action}`,
-    key: buildRateLimitKey(action, [ip, email?.toLowerCase() ?? null]),
+    key: buildRateLimitKey(action, [email?.toLowerCase() || ip]),
     limit: 5,
     windowMs: 15 * 60 * 1000,
-    blockMs: 15 * 60 * 1000
+    blockMs: 15 * 60 * 1000,
+    failClosed: true
   });
 
   if (result.blocked) {
@@ -94,90 +89,28 @@ async function clearAuthSessionCookies() {
 }
 
 export async function login(formData: FormData) {
-  const startedAt = Date.now();
-  const redirectTo = normalizeRedirectTarget(formData.get("next"));
-  const headerStore = await headers();
-  const ip = getClientIp(headerStore);
-
   try {
-    const payload = loginSchema.parse({
-      email: formData.get("email"),
-      password: formData.get("password")
-    });
-    const email = payload.email.toLowerCase();
-    const throttleKey = buildLoginThrottleKey(email, ip);
-
-    if (await isLoginBlocked(throttleKey)) {
-      await logAuditEvent({
-        action: "auth.login_blocked",
-        entityType: "user",
-        entityId: email,
-        ip,
-        metadata: { email }
-      });
-      logWarn("Login blocked by rate limit", {
-        ip,
-        redirectTo,
-        ms: Date.now() - startedAt
-      });
-      redirect("/login?error=Too%20many%20login%20attempts.%20Please%20wait%2015%20minutes.");
-    }
-
     await signIn("credentials", {
-      email,
-      password: payload.password,
-      redirectTo
+      email: formData.get("email"), password: formData.get("password"),
+      redirectTo: normalizeRedirectTarget(formData.get("next"))
     });
-
-    await clearFailedLogin(throttleKey);
-    await logAuditEvent({
-      action: "auth.login_succeeded",
-      entityType: "user",
-      entityId: email,
-      ip,
-      metadata: { email }
-    });
-    logInfo("Login succeeded", {
-      ip,
-      redirectTo,
-      ms: Date.now() - startedAt
-    });
-
-    redirect(redirectTo);
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     if (error instanceof AuthError) {
-      const email = String(formData.get("email") ?? "").trim().toLowerCase();
-      if (email) {
-        await recordFailedLogin(buildLoginThrottleKey(email, ip));
-        await logAuditEvent({
-          action: "auth.login_failed",
-          entityType: "user",
-          entityId: email,
-          ip,
-          metadata: { email }
-        });
-      }
-      logWarn("Login failed", {
-        ip,
-        redirectTo,
-        ms: Date.now() - startedAt
-      });
-      redirect("/login?error=The%20email%20or%20password%20does%20not%20match.%20Please%20check%20your%20password%20and%20try%20again.");
+      const code = error instanceof CredentialsSignin ? error.code : "unavailable";
+      redirect(`/login?code=${encodeURIComponent(code)}`);
     }
-    if (error instanceof ZodError) {
-      logWarn("Login validation failed", {
-        ip,
-        redirectTo,
-        ms: Date.now() - startedAt
-      });
-      redirect("/login?error=Please%20enter%20a%20valid%20email%20and%20password");
-    }
-
-    throw error;
+    logError("Login failed", error);
+    redirect("/login?code=unavailable");
   }
 }
 
+// Public signup is deliberately dormant; a direct server-action request must
+// not bypass the unavailable registration page. No environment opt-in.
+const PUBLIC_REGISTRATION_ENABLED = false;
+
 export async function register(formData: FormData) {
+  if (!PUBLIC_REGISTRATION_ENABLED) redirect("/login");
   const startedAt = Date.now();
   try {
     await clearAuthSessionCookies();
@@ -329,7 +262,7 @@ export async function resendEmailVerification(formData: FormData) {
       ip,
       email,
       redirectTo:
-        "/verify-email?error=Too%20many%20confirmation%20email%20requests.%20Please%20wait%2015%20minutes."
+        "/verify-email?sent=1"
     });
     const [user] = await db
       .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
@@ -360,11 +293,7 @@ export async function resendEmailVerification(formData: FormData) {
             reason: error instanceof Error ? error.message : String(error)
           }
         });
-        redirect(
-          `/verify-email?email=${encodeURIComponent(email)}&error=${encodeURIComponent(
-            "The email provider rejected the send request. Please check the email service configuration and try again."
-          )}`
-        );
+        redirect("/verify-email?sent=1");
       }
 
       await logAuditEvent({
@@ -383,14 +312,14 @@ export async function resendEmailVerification(formData: FormData) {
       ms: Date.now() - startedAt
     });
 
-    redirect(`/verify-email?sent=1&email=${encodeURIComponent(email)}`);
+    redirect("/verify-email?sent=1");
   } catch (error) {
     if (error instanceof ZodError) {
       logWarn("Email verification resend validation failed", {
         ip,
         ms: Date.now() - startedAt
       });
-      redirect("/verify-email?error=Please%20enter%20a%20valid%20email");
+      redirect("/verify-email?code=invalid_email");
     }
 
     if (!isRedirectError(error)) {
@@ -399,7 +328,8 @@ export async function resendEmailVerification(formData: FormData) {
         ms: Date.now() - startedAt
       });
     }
-    throw error;
+    if (isRedirectError(error)) throw error;
+    redirect("/verify-email?sent=1");
   }
 }
 
@@ -454,7 +384,7 @@ export async function requestPasswordReset(formData: FormData) {
         ip,
         ms: Date.now() - startedAt
       });
-      redirect("/forgot-password?error=Please%20enter%20a%20valid%20email");
+      redirect("/forgot-password?code=invalid_email");
     }
 
     if (!isRedirectError(error)) {
@@ -463,7 +393,8 @@ export async function requestPasswordReset(formData: FormData) {
         ms: Date.now() - startedAt
       });
     }
-    throw error;
+    if (isRedirectError(error)) throw error;
+    redirect("/forgot-password?sent=1");
   }
 }
 
@@ -483,7 +414,7 @@ export async function resetPassword(formData: FormData) {
       ip,
       email: rawToken.slice(0, 12),
       redirectTo:
-        "/reset-password?error=Too%20many%20reset%20attempts.%20Please%20request%20a%20new%20link."
+        "/reset-password?code=too_many_attempts"
     });
     const result = await resetPasswordWithToken(payload);
 
@@ -493,11 +424,7 @@ export async function resetPassword(formData: FormData) {
         ip,
         ms: Date.now() - startedAt
       });
-      redirect(`/reset-password?error=${encodeURIComponent(
-        result.reason === "expired"
-          ? "This reset link has expired. Please request a new one."
-          : "This reset link is invalid. Please request a new one."
-      )}`);
+      redirect("/reset-password?code=invalid_token");
     }
 
     await logAuditEvent({
@@ -514,7 +441,7 @@ export async function resetPassword(formData: FormData) {
       ms: Date.now() - startedAt
     });
 
-    redirect("/login?success=Password%20updated.%20You%20can%20log%20in%20now.");
+    redirect("/login?success=password_reset");
   } catch (error) {
     if (error instanceof ZodError) {
       logWarn("Password reset validation failed", {
@@ -522,7 +449,7 @@ export async function resetPassword(formData: FormData) {
         ms: Date.now() - startedAt
       });
       const url = new URLSearchParams({
-        error: "Please enter a new password with at least 10 characters"
+        code: "invalid_password"
       });
 
       if (rawToken) {
@@ -538,6 +465,20 @@ export async function resetPassword(formData: FormData) {
         ms: Date.now() - startedAt
       });
     }
-    throw error;
+    if (isRedirectError(error)) throw error;
+    redirect("/reset-password?code=unavailable");
+  }
+}
+
+export async function confirmEmail(formData: FormData) {
+  try {
+    await enforceAnonymousActionLimit({ action: "verify-email-submit", ip: getClientIp(await headers()), redirectTo: "/verify-email?code=too_many_attempts" });
+    const token = formData.get("token");
+    if (typeof token !== "string" || !(await verifyEmailToken(token)).ok) redirect("/verify-email?code=invalid_token");
+    redirect("/login?success=email_verified");
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    logError("Email verification failed", error);
+    redirect("/verify-email?code=unavailable");
   }
 }
