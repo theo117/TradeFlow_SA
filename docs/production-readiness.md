@@ -190,6 +190,70 @@ VOID_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h10_test_admin \
   npm test -- tests/invoice-void.test.ts
 ```
 
+## Historical document snapshots (H11)
+
+Migration `0003_document_snapshots.sql` adds nullable JSONB `document_snapshot`
+columns to `invoices` and `quotes`. It performs no backfill or other data writes.
+Apply it with the existing `npm run db:migrate` path before running the new code;
+untracked canonical installations must first use the documented explicit baseline
+process above. Earlier migrations and the invoice numbering sequence are unchanged.
+
+New invoice snapshots freeze customer name/email/phone/address and business
+name/email/phone/address/logo URL, registration/VAT details, banking details and
+payment instructions. Quote snapshots contain the same rendered identity plus
+service names/descriptions keyed by quote-item ID. Quantities, prices, totals,
+dates and existing invoice item descriptions retain their existing storage and rules.
+Operational WhatsApp preferences, ownership and subscription settings stay live.
+
+Capture happens inside the status transaction when a draft invoice first becomes
+sent, overdue or paid, including email/WhatsApp issuance. Quotes freeze on creation
+as sent or on a draft-to-sent/accepted transition, including WhatsApp issuance.
+Creation still accepts only draft/sent; explicit public acceptance still requires
+sent. Reads never capture snapshots. Document row locks serialize issuance/retry;
+scoped customer/business/service reads prevent copying another tenant's records.
+A failure in either snapshot persistence or status persistence rolls back both.
+
+Private/public document views and PDF exports use the same snapshot-aware detail
+queries. Invoice CSV exports use the historical customer name/email as well.
+An explicitly null snapshotted field remains null, rather than falling back to a
+later value. Customer directory/statement headers remain current account identity;
+a statement is not a reissued historical invoice. No statement amounts change.
+
+Conversion uses an issued quote's stored identity and service wording alongside
+its existing persisted quantities/prices/subtotals/total. The new draft invoice
+inherits that identity and retains it when issued. Other drafts continue to show
+live identity until issuance. Existing snapshots are never replaced, even if a
+quote is returned to draft under its existing status workflow. Paid/overdue/void
+transitions retain snapshots; void presentation still suppresses collection details.
+
+Legacy issued rows with null snapshots retain the existing current-record fallback.
+Later payment, overdue, void or acceptance does not reconstruct their missing
+history. Legacy quote conversion uses the available current wording, as before;
+it cannot prove the original agreement. If a legacy quote is deliberately returned
+to draft and reissued, a new snapshot records that reissuance's current details,
+not reconstructed original history. No automatic backfill is provided.
+
+Logo replacement/removal retains a blob referenced by a stored document snapshot.
+Unreferenced old logos retain existing deletion behavior. Retained images increase
+storage use; external deletion or modification of an image URL can still affect
+rendering, so blob retention must accompany database backups. Snapshot capture
+adds short row/share locks and small JSON storage; no caching or reporting system
+is introduced. Deploy migration and code together without leaving old writers
+running, since old application versions do not capture newly issued documents.
+
+Before deployment, perform a read-only review of existing issued quotes/invoices
+against retained PDFs, sent documents and available backups to identify uncertain
+historical identity or wording. Null snapshots cannot prove previous customer,
+business, bank, service or logo values. Do not populate them from current records
+and claim historical accuracy. Financial amounts require no recalculation for H11.
+
+Disposable PostgreSQL 17 integration tests:
+
+```bash
+DOCUMENT_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h11_test_admin \
+  npm test -- tests/document-snapshots.test.ts
+```
+
 ## Monitoring
 
 Configure alerts for:

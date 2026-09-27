@@ -1,3 +1,4 @@
+import type { DocumentSnapshot, QuoteSnapshot } from "@/lib/document-snapshots";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -235,6 +236,7 @@ export const quotes = pgTable(
       .notNull()
       .references(() => customers.id, { onDelete: "restrict" }),
     status: quoteStatusEnum("status").notNull(),
+    documentSnapshot: jsonb("document_snapshot").$type<QuoteSnapshot>(),
     total: numeric("total", { precision: 12, scale: 2, mode: "number" })
       .default(0)
       .notNull(),
@@ -299,6 +301,7 @@ export const invoices = pgTable(
         sql`('INV-' || lpad(nextval('invoice_number_seq')::text, 6, '0'))`
       ),
     status: invoiceStatusEnum("status").default("draft").notNull(),
+    documentSnapshot: jsonb("document_snapshot").$type<DocumentSnapshot>(),
     total: numeric("total", { precision: 12, scale: 2, mode: "number" })
       .default(0)
       .notNull(),

@@ -22,6 +22,7 @@ import { revokePublicShareTokens } from "@/lib/public-access";
 import { convertQuoteToInvoiceSchema, invoiceStatusSchema } from "@/lib/validations";
 import { sendInvoiceWhatsappMessage } from "@/lib/whatsapp";
 import { buildInvoiceItemsFromQuoteItems } from "@/lib/workflows";
+import { captureDocumentIdentity, freezeInvoice } from "@/lib/document-snapshots";
 import { isNextRedirectError } from "@/lib/navigation";
 
 export async function convertQuoteToInvoice(formData: FormData) {
@@ -54,38 +55,43 @@ export async function convertQuoteToInvoice(formData: FormData) {
       );
     }
 
-    const [quote] = await db
-      .select({
-        id: quotes.id,
-        customerId: quotes.customerId,
-        total: quotes.total
-      })
-      .from(quotes)
-      .where(and(eq(quotes.businessId, business.id), eq(quotes.id, payload.quoteId)))
-      .limit(1);
+    const { invoice, quote } = await db.transaction(async (tx) => {
+      const [quote] = await tx
+        .select({
+          id: quotes.id,
+          customerId: quotes.customerId,
+          total: quotes.total,
+          documentSnapshot: quotes.documentSnapshot
+        })
+        .from(quotes)
+        .where(and(eq(quotes.businessId, business.id), eq(quotes.id, payload.quoteId)))
+        .limit(1).for("update");
 
-    if (!quote) {
-      redirect(
-        `${redirectTo}?error=${encodeURIComponent("Quote not found")}`
-      );
-    }
+      if (!quote) {
+        redirect(
+          `${redirectTo}?error=${encodeURIComponent("Quote not found")}`
+        );
+      }
 
-    const items = await db
-      .select({
-        serviceId: quoteItems.serviceId,
-        quantity: quoteItems.quantity,
-        price: quoteItems.price,
-        subtotal: quoteItems.subtotal,
-        service: {
-          name: services.name,
-          description: services.description
-        }
-      })
-      .from(quoteItems)
-      .leftJoin(services, eq(quoteItems.serviceId, services.id))
-      .where(eq(quoteItems.quoteId, quote.id));
+      // Validate source ownership even for legacy quotes without snapshots.
+      await captureDocumentIdentity(tx, business.id, quote.customerId);
+      const items = await tx
+        .select({
+          id: quoteItems.id,
+          serviceId: quoteItems.serviceId,
+          quantity: quoteItems.quantity,
+          price: quoteItems.price,
+          subtotal: quoteItems.subtotal,
+          service: {
+            name: services.name,
+            description: services.description
+          }
+        })
+        .from(quoteItems)
+        .leftJoin(services, and(eq(quoteItems.serviceId, services.id), eq(services.businessId, business.id)))
+        .where(eq(quoteItems.quoteId, quote.id));
 
-    const invoice = await db.transaction(async (tx) => {
+      if (items.some((item) => !item.service)) throw new Error("Document service does not belong to this business");
       const [createdInvoice] = await tx
         .insert(invoices)
         .values({
@@ -93,13 +99,17 @@ export async function convertQuoteToInvoice(formData: FormData) {
           customerId: quote.customerId,
           quoteId: quote.id,
           status: "draft",
+          documentSnapshot: quote.documentSnapshot
+            ? { business: quote.documentSnapshot.business, customer: quote.documentSnapshot.customer } : null,
           total: quote.total,
           dueDate: payload.dueDate
         })
         .returning({ id: invoices.id });
 
       await tx.insert(invoiceItems).values(
-        buildInvoiceItemsFromQuoteItems(items).map((item) => ({
+        buildInvoiceItemsFromQuoteItems(items.map((item) => ({
+          ...item, service: quote.documentSnapshot?.items[item.id] ?? item.service
+        }))).map((item) => ({
           invoiceId: createdInvoice.id,
           serviceId: item.serviceId,
           description: item.description,
@@ -109,7 +119,7 @@ export async function convertQuoteToInvoice(formData: FormData) {
         }))
       );
 
-      return createdInvoice;
+      return { invoice: createdInvoice, quote };
     });
 
     await logActivityEvent({
@@ -161,6 +171,7 @@ export async function updateInvoiceStatus(
       if (current.status === "void") throw new Error("Void invoices cannot change status");
       if (current.status === "paid" && status !== "paid") throw new Error("Paid invoices are protected and cannot change status");
       if (current.status !== "draft" && status === "draft") throw new Error("Issued invoices cannot be returned to draft. Void an unpaid invoice instead.");
+      if (current.status === "draft" && status !== "draft") await freezeInvoice(tx, business.id, invoiceId);
       const [updated] = await tx.update(invoices).set({ status })
         .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
         .returning({ id: invoices.id, customerId: invoices.customerId, status: invoices.status });
@@ -208,33 +219,18 @@ export async function recordInvoiceReminder(
   const business = await requirePaidBusiness();
 
   try {
-    const [invoice] = await db
-      .select({
-        id: invoices.id,
-        customerId: invoices.customerId,
-        status: invoices.status
-      })
-      .from(invoices)
-      .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)))
-      .limit(1);
-
-    if (!invoice) {
-      return {
-        error: true,
-        message: "Invoice not found"
-      };
-    }
-
-    if (invoice.status === "void") {
-      return { error: true, message: "Void invoices are not payable and cannot be sent for collection" };
-    }
-
-    if (invoice.status === "draft") {
-      await db
-        .update(invoices)
-        .set({ status: "sent" })
-        .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoice.id), eq(invoices.status, "draft")));
-    }
+    const invoice = await db.transaction(async (tx) => {
+      const [current] = await tx.select({ id: invoices.id, customerId: invoices.customerId, status: invoices.status })
+        .from(invoices).where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId))).for("update");
+      if (!current) throw new Error("Invoice not found");
+      if (current.status === "void") throw new Error("Void invoices are not payable and cannot be sent for collection");
+      if (current.status === "draft") {
+        await freezeInvoice(tx, business.id, invoiceId);
+        await tx.update(invoices).set({ status: "sent" })
+          .where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId)));
+      }
+      return current;
+    });
 
     if (channel === "whatsapp") {
       const [invoiceDetail] = await db

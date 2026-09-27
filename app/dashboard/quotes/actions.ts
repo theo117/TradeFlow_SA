@@ -12,6 +12,7 @@ import { revokePublicShareTokens } from "@/lib/public-access";
 import { quoteSchema } from "@/lib/validations";
 import { sendQuoteWhatsappMessage } from "@/lib/whatsapp";
 import { calculateQuoteAmounts } from "@/lib/workflows";
+import { freezeQuote } from "@/lib/document-snapshots";
 import { isNextRedirectError } from "@/lib/navigation";
 
 export async function createQuote(formData: FormData) {
@@ -63,7 +64,7 @@ export async function createQuote(formData: FormData) {
         .values({
           businessId: business.id,
           customerId: payload.customerId,
-          status: payload.status,
+          status: "draft",
           total: sql`${calculated.total}`
         })
         .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
@@ -78,7 +79,12 @@ export async function createQuote(formData: FormData) {
         }))
       );
 
-      return createdQuote;
+      if (payload.status !== "draft") {
+        await freezeQuote(tx, business.id, createdQuote.id);
+        await tx.update(quotes).set({ status: payload.status })
+          .where(and(eq(quotes.businessId, business.id), eq(quotes.id, createdQuote.id)));
+      }
+      return { ...createdQuote, status: payload.status };
     });
 
     await logActivityEvent({
@@ -113,11 +119,16 @@ export async function updateQuoteStatus(
   const business = await requirePaidBusiness();
 
   try {
-    const [updatedQuote] = await db
-      .update(quotes)
-      .set({ status })
-      .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
-      .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
+    const updatedQuote = await db.transaction(async (tx) => {
+      const [current] = await tx.select({ status: quotes.status }).from(quotes)
+        .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId))).for("update");
+      if (!current) return null;
+      if (current.status === "draft" && status !== "draft") await freezeQuote(tx, business.id, quoteId);
+      const [updated] = await tx.update(quotes).set({ status })
+        .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
+        .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
+      return updated;
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/quotes");
@@ -219,10 +230,11 @@ export async function sendQuoteViaWhatsapp(quoteId: string) {
     }
 
     if (quote.status === "draft") {
-      await db
-        .update(quotes)
-        .set({ status: "sent" })
-        .where(eq(quotes.id, quote.id));
+      await db.transaction(async (tx) => {
+        await freezeQuote(tx, business.id, quote.id);
+        await tx.update(quotes).set({ status: "sent" })
+          .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quote.id), eq(quotes.status, "draft")));
+      });
     }
 
     const whatsappResult = await sendQuoteWhatsappMessage({

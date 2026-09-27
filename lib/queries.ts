@@ -569,6 +569,7 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
   const [quoteRow] = await db
     .select({
       id: quotes.id,
+      documentSnapshot: quotes.documentSnapshot,
       businessId: quotes.businessId,
       customerId: quotes.customerId,
       status: quotes.status,
@@ -654,8 +655,8 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
     status: quoteRow.status,
     total: quoteRow.total,
     created_at: quoteRow.createdAt,
-    business: mapBusiness(quoteRow.business),
-    customer: quoteRow.customer?.id ? mapCustomer(quoteRow.customer) : null,
+    business: mapBusiness({ ...quoteRow.business, ...quoteRow.documentSnapshot?.business }),
+    customer: quoteRow.customer?.id ? mapCustomer({ ...quoteRow.customer, ...quoteRow.documentSnapshot?.customer }) : null,
     whatsapp_delivery_status: whatsappDeliveryStatus,
     items: itemRows.map((item) => ({
       id: item.id,
@@ -667,8 +668,9 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
       service: item.service?.id
         ? {
             id: item.service.id,
-            name: item.service.name ?? "Unknown service",
-            description: item.service.description
+            name: quoteRow.documentSnapshot?.items[item.id]?.name ?? item.service.name ?? "Unknown service",
+            description: quoteRow.documentSnapshot?.items[item.id]
+              ? quoteRow.documentSnapshot.items[item.id].description : item.service.description
           }
         : null
     }))
@@ -764,6 +766,7 @@ async function getInvoiceDetail(
   const [invoiceRow] = await db
     .select({
       id: invoices.id,
+      documentSnapshot: invoices.documentSnapshot,
       businessId: invoices.businessId,
       customerId: invoices.customerId,
       quoteId: invoices.quoteId,
@@ -862,8 +865,8 @@ async function getInvoiceDetail(
     total: invoiceRow.total,
     due_date: invoiceRow.dueDate,
     created_at: invoiceRow.createdAt,
-    business: mapBusiness(invoiceRow.business),
-    customer: mapCustomer(invoiceRow.customer),
+    business: mapBusiness({ ...invoiceRow.business, ...invoiceRow.documentSnapshot?.business }),
+    customer: mapCustomer({ ...invoiceRow.customer, ...invoiceRow.documentSnapshot?.customer }),
     whatsapp_delivery_status: whatsappDeliveryStatus,
     items: itemRows.map((item) => ({
       id: item.id,

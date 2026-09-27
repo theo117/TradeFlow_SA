@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { requirePaidBusiness } from "@/lib/auth";
 import { csvResponse } from "@/lib/csv";
 import { db } from "@/lib/db";
@@ -15,8 +15,8 @@ export async function GET() {
       total: invoices.total,
       dueDate: invoices.dueDate,
       createdAt: invoices.createdAt,
-      customerName: customers.name,
-      customerEmail: customers.email
+      customerName: sql<string>`case when ${invoices.documentSnapshot} is null then ${customers.name} else ${invoices.documentSnapshot}->'customer'->>'name' end`,
+      customerEmail: sql<string | null>`case when ${invoices.documentSnapshot} is null then ${customers.email} else ${invoices.documentSnapshot}->'customer'->>'email' end`
     })
     .from(invoices)
     .leftJoin(customers, eq(invoices.customerId, customers.id))

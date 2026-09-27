@@ -114,6 +114,8 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     expect(tables).toEqual(Object.keys(snapshot.tables).sort());
     const enums = (await query(url, "SELECT 'public.' || t.typname AS name FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e' ORDER BY t.typname")).rows.map((r) => r.name);
     expect(enums).toEqual(Object.keys(snapshot.enums).sort());
+    expect((await query(url, "SELECT table_name,data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND column_name='document_snapshot' ORDER BY table_name")).rows)
+      .toEqual(["invoices", "quotes"].map((table_name) => ({ table_name, data_type: "jsonb", is_nullable: "YES", column_default: null })));
     expect(await sequence(url)).toEqual([{ last_value: "1000", is_called: false }]);
     await seed(url);
     expect((await query(url, "SELECT invoice_number FROM invoices")).rows).toEqual([{ invoice_number: "INV-001000" }]);
@@ -152,6 +154,9 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     expect((await migrate(url)).code).toBe(0);
     expect((await query(url, "SELECT recurring_template_id,recurring_period FROM invoices")).rows)
       .toEqual([{ recurring_template_id: null, recurring_period: null }]);
+    for (const table of ["invoices", "quotes"]) {
+      expect((await query(url, `SELECT count(*)::int AS count FROM ${table} WHERE document_snapshot IS NOT NULL`)).rows[0].count).toBe(0);
+    }
     expect((await migrate(url)).output).toContain("0 applied");
     expect((await migrate(url, ["--baseline"])).output).toContain("no-op");
     expect(await rows(url)).toEqual(before);

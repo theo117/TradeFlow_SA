@@ -7,6 +7,7 @@ import { del, put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { businesses } from "@/lib/db/schema";
 import { requireBusiness } from "@/lib/auth";
+import { isDocumentLogoReferenced } from "@/lib/document-snapshots";
 import { logWarn } from "@/lib/observability";
 
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
@@ -104,7 +105,9 @@ export async function updateBusinessProfile(formData: FormData) {
 
   if (previousLogoUrl && previousLogoUrl !== logoUrl) {
     try {
-      await del(previousLogoUrl);
+      if (!(await isDocumentLogoReferenced(business.id, previousLogoUrl))) {
+        await del(previousLogoUrl);
+      }
     } catch (error) {
       logWarn("Old business logo could not be deleted", {
         businessId: business.id,
