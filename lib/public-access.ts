@@ -1,3 +1,4 @@
+import { validId } from "@/lib/action-errors";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { logAuditEvent } from "@/lib/audit";
@@ -71,7 +72,7 @@ export async function validatePublicAccessToken({
   id: string;
   token?: string | null;
 }) {
-  if (!token) {
+  if (!validId(id) || !token) {
     return false;
   }
 

@@ -1,5 +1,8 @@
 "use server";
 
+import { safeActionError, requireValidId } from "@/lib/action-errors";
+
+import { createOnce } from "@/lib/create-submission";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -23,10 +26,12 @@ export async function createQuote(formData: FormData) {
     const payload = quoteSchema.parse({
       customerId: formData.get("customerId"),
       status: formData.get("status"),
-      items
+      items,
+      notes: formData.get("notes") ?? ""
     });
 
-    const [customer] = await db
+    const { result: quote, created } = await createOnce(business.id, "quote", formData.get("submissionKey"), async (tx) => {
+    const [customer] = await tx
       .select({ id: customers.id })
       .from(customers)
       .where(
@@ -42,7 +47,7 @@ export async function createQuote(formData: FormData) {
     }
 
     const serviceIds = [...new Set(payload.items.map((item) => item.service_id))];
-    const availableServices = await db
+    const availableServices = await tx
       .select({ id: services.id, price: sql<string>`${services.price}::text` })
       .from(services)
       .where(
@@ -58,13 +63,13 @@ export async function createQuote(formData: FormData) {
 
     const calculated = calculateQuoteAmounts(payload.items, availableServices);
 
-    const quote = await db.transaction(async (tx) => {
       const [createdQuote] = await tx
         .insert(quotes)
         .values({
           businessId: business.id,
           customerId: payload.customerId,
           status: "draft",
+          internalNotes: payload.notes || null,
           total: sql`${calculated.total}`
         })
         .returning({ id: quotes.id, customerId: quotes.customerId, status: quotes.status });
@@ -87,7 +92,7 @@ export async function createQuote(formData: FormData) {
       return { ...createdQuote, status: payload.status };
     });
 
-    await logActivityEvent({
+    if (created) await logActivityEvent({
       businessId: business.id,
       customerId: quote.customerId,
       quoteId: quote.id,
@@ -106,7 +111,7 @@ export async function createQuote(formData: FormData) {
       redirect(`/dashboard/quotes/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/quotes/new?error=${encodeURIComponent(error.message)}`);
+      redirect(`/dashboard/quotes/new?error=${encodeURIComponent(safeActionError(error))}`);
     }
     throw error;
   }
@@ -119,6 +124,8 @@ export async function updateQuoteStatus(
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(quoteId);
+    if (!["draft", "sent", "accepted"].includes(status)) return { error: true, message: "Invalid quote status" };
     const updatedQuote = await db.transaction(async (tx) => {
       const [current] = await tx.select({ status: quotes.status }).from(quotes)
         .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId))).for("update");
@@ -156,7 +163,7 @@ export async function updateQuoteStatus(
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to update quote"
+      message: safeActionError(error, "Unable to update quote")
     };
   }
 }
@@ -166,6 +173,7 @@ export async function deleteQuote(formData: FormData) {
   const quoteId = String(formData.get("quoteId"));
 
   try {
+    requireValidId(quoteId);
     const [deletedQuote] = await db
       .delete(quotes)
       .where(and(eq(quotes.businessId, business.id), eq(quotes.id, quoteId)))
@@ -188,7 +196,7 @@ export async function deleteQuote(formData: FormData) {
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to delete quote"
+      message: safeActionError(error, "Unable to delete quote")
     };
   }
 }
@@ -197,6 +205,7 @@ export async function sendQuoteViaWhatsapp(quoteId: string) {
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(quoteId);
     const [quote] = await db
       .select({
         id: quotes.id,
@@ -280,7 +289,7 @@ export async function sendQuoteViaWhatsapp(quoteId: string) {
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to send quote",
+      message: safeActionError(error, "Unable to send quote"),
       delivery: "manual" as const
     };
   }
@@ -290,6 +299,7 @@ export async function revokeQuotePublicLinks(quoteId: string) {
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(quoteId);
     const revokedCount = await revokePublicShareTokens({
       businessId: business.id,
       documentType: "quote",
@@ -312,9 +322,7 @@ export async function revokeQuotePublicLinks(quoteId: string) {
     return {
       error: true,
       message:
-        error instanceof Error
-          ? error.message
-          : "Unable to revoke public quote links"
+        safeActionError(error, "Unable to revoke public quote links")
     };
   }
 }

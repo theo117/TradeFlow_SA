@@ -64,8 +64,9 @@ export default async function QuoteDetailPage({
       quote={quote}
       business={quote.business}
       customer={quote.customer}
-      actions={
-        <QuoteDetailActions
+      actions={<>
+        {quote.internal_notes ? <div className="whitespace-pre-wrap rounded-2xl border p-4"><h2 className="font-semibold">Internal notes</h2><p>{quote.internal_notes}</p></div> : null}
+      <QuoteDetailActions
           quoteId={quote.id}
           status={quote.status}
           defaultDueDate={getDefaultInvoiceDueDate()}
@@ -74,7 +75,7 @@ export default async function QuoteDetailPage({
           publicHref={publicUrl}
           existingInvoice={existingInvoice}
         />
-      }
+      </>}
     />
   );
 }

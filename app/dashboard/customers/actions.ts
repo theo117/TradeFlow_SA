@@ -1,5 +1,9 @@
 "use server";
 
+import { isNextRedirectError } from "@/lib/navigation";
+import { safeActionError, requireValidId } from "@/lib/action-errors";
+
+import { createOnce } from "@/lib/create-submission";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -23,7 +27,8 @@ export async function createCustomer(formData: FormData) {
       address: formData.get("address")
     });
 
-    const [customer] = await db.insert(customers).values({
+    const { result: customer, created } = await createOnce(business.id, "customer", formData.get("submissionKey"), async (tx) => {
+    const [customer] = await tx.insert(customers).values({
       businessId: business.id,
       name: payload.name,
       email: payload.email || null,
@@ -36,7 +41,10 @@ export async function createCustomer(formData: FormData) {
       address: payload.address || null
     }).returning({ id: customers.id, name: customers.name });
 
-    await logActivityEvent({
+      return customer;
+    });
+
+    if (created) await logActivityEvent({
       businessId: business.id,
       customerId: customer.id,
       type: "customer.created",
@@ -46,9 +54,11 @@ export async function createCustomer(formData: FormData) {
     revalidatePath("/dashboard/customers");
     return {
       error: false,
+      customerId: customer.id,
       message: "Customer created"
     };
   } catch (error) {
+    if (isNextRedirectError(error)) throw error;
     if (error instanceof ZodError) {
       return {
         error: true,
@@ -58,7 +68,7 @@ export async function createCustomer(formData: FormData) {
     if (error instanceof Error) {
       return {
         error: true,
-        message: error.message
+        message: safeActionError(error)
       };
     }
     return {
@@ -70,6 +80,7 @@ export async function createCustomer(formData: FormData) {
 
 export async function updateCustomer(customerId: string, formData: FormData) {
   try {
+    requireValidId(customerId);
     const business = await requirePaidBusiness();
     const payload = customerSchema.parse({
       name: formData.get("name"),
@@ -111,11 +122,12 @@ export async function updateCustomer(customerId: string, formData: FormData) {
 
     revalidatePath("/dashboard/customers");
   } catch (error) {
+    if (isNextRedirectError(error)) throw error;
     if (error instanceof ZodError) {
       redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(error.message)}`);
+      redirect(`/dashboard/customers/${customerId}/edit?error=${encodeURIComponent(safeActionError(error))}`);
     }
     throw error;
   }
@@ -128,6 +140,7 @@ export async function deleteCustomer(formData: FormData) {
   const customerId = String(formData.get("customerId"));
 
   try {
+    requireValidId(customerId);
     const [deletedCustomer] = await db
       .delete(customers)
       .where(
@@ -151,7 +164,7 @@ export async function deleteCustomer(formData: FormData) {
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to delete customer"
+      message: safeActionError(error, "Unable to delete customer")
     };
   }
 }

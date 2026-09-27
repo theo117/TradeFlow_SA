@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function CustomerCreateForm() {
   const router = useRouter();
+  const [submissionKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -33,12 +34,15 @@ export function CustomerCreateForm() {
       router.refresh();
     } catch {
       setError("Unable to create customer. Please try again.");
+      router.refresh();
+    } finally {
       setPending(false);
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <input type="hidden" name="submissionKey" value={submissionKey} />
       {error ? (
         <div
           role="alert"

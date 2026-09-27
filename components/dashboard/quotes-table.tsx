@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import { startTransition, useCallback, useMemo, useState } from "react";
 import { ArrowUpRight, FileText, SendHorizontal, Trash2 } from "lucide-react";
@@ -26,6 +28,7 @@ type QuoteRow = Pick<Quote, "id" | "status" | "total" | "created_at"> & {
 };
 
 export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
+  const router = useRouter();
   const PAGE_SIZE = 6;
   const [rows, setRows] = useState(quotes);
   const [statusFilter, setStatusFilter] = useState<
@@ -128,6 +131,7 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
       setRows(nextRows);
     });
 
+    try {
     const result = await updateQuoteStatus(quote.id, nextStatus);
 
     if (result?.error) {
@@ -140,7 +144,14 @@ export function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
       });
     }
 
-    setStatusPendingId(null);
+    
+    } catch {
+      setRows(snapshot);
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setStatusPendingId(null);
+    }
   }
 
   return (

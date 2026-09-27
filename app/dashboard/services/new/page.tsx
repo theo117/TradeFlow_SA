@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { createService } from "@/app/dashboard/services/actions";
 import { WorkflowHeader } from "@/components/dashboard/workflow-header";
@@ -27,6 +28,7 @@ export default async function NewServicePage({
       />
 
       <form action={createService} className="space-y-4">
+            <input type="hidden" name="submissionKey" value={randomUUID()} />
         {params.error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {params.error}

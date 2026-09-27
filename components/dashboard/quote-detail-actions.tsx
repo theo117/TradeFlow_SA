@@ -56,6 +56,7 @@ export function QuoteDetailActions({
     setPending("status");
     setCurrentStatus(nextStatus);
 
+    try {
     const result = await updateQuoteStatus(quoteId, nextStatus);
 
     if (result?.error) {
@@ -69,32 +70,48 @@ export function QuoteDetailActions({
       router.refresh();
     }
 
-    setPending(null);
+    
+    } catch {
+      setCurrentStatus(currentStatus);
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleDelete() {
     setPending("delete");
     const formData = new FormData();
     formData.set("quoteId", quoteId);
+    try {
     const result = await deleteQuote(formData);
 
     if (result?.error) {
       setToast({ kind: "error", message: result.message });
-      setPending(null);
+      
       setConfirmOpen(false);
       return;
     }
 
     router.push("/dashboard/quotes?success=Quote%20deleted");
+    } catch {
+      
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleWhatsapp() {
     setPending("whatsapp");
+    try {
     const result = await sendQuoteViaWhatsapp(quoteId);
 
     if (result?.error) {
       setToast({ kind: "error", message: result.message });
-      setPending(null);
+      
       return;
     }
 
@@ -105,11 +122,19 @@ export function QuoteDetailActions({
       window.open(whatsappHref, "_blank", "noreferrer");
     }
 
-    setPending(null);
+    
+    } catch {
+      
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleRevokeLinks() {
     setPending("revoke");
+    try {
     const result = await revokeQuotePublicLinks(quoteId);
 
     if (result?.error) {
@@ -119,7 +144,14 @@ export function QuoteDetailActions({
       router.refresh();
     }
 
-    setPending(null);
+    
+    } catch {
+      
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   return (

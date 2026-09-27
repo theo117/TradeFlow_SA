@@ -1,3 +1,4 @@
+import { getEmailProviderConfig } from "@/lib/env";
 import { createHash, randomBytes } from "crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -21,25 +22,6 @@ function getAppUrl() {
   return configuredUrl?.replace(/\/$/, "") ?? "http://localhost:3000";
 }
 
-function getEmailProviderConfig() {
-  // Honor an explicit opt-out; preserve existing credential-based delivery
-  // when the optional flag is unset.
-  if (process.env.EMAIL_ENABLED === "false") return null;
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const emailFrom = process.env.EMAIL_FROM;
-
-  if (resendApiKey && emailFrom) {
-    return { resendApiKey, emailFrom };
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "Password reset email is not configured. Set RESEND_API_KEY and EMAIL_FROM."
-    );
-  }
-
-  return null;
-}
 
 export async function createPasswordResetToken(userId: string) {
   const token = randomBytes(TOKEN_BYTES).toString("base64url");

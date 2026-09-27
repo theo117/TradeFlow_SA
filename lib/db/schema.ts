@@ -238,6 +238,7 @@ export const quotes = pgTable(
       .references(() => customers.id, { onDelete: "restrict" }),
     status: quoteStatusEnum("status").notNull(),
     documentSnapshot: jsonb("document_snapshot").$type<QuoteSnapshot>(),
+    internalNotes: text("internal_notes"),
     total: numeric("total", { precision: 12, scale: 2, mode: "number" })
       .default(0)
       .notNull(),
@@ -373,6 +374,7 @@ export const recurringInvoiceTemplates = pgTable(
       .default(0)
       .notNull(),
     nextInvoiceDate: date("next_invoice_date", { mode: "string" }).notNull(),
+    scheduleAnchorDate: date("schedule_anchor_date", { mode: "string" }),
     paymentTermsDays: integer("payment_terms_days").default(7).notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -603,3 +605,15 @@ export const auditEvents = pgTable(
     createdAtIdx: index("audit_events_created_at_idx").on(table.createdAt)
   })
 );
+
+// Durable create receipts: the result and application record commit together.
+export const createSubmissions = pgTable("create_submissions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  operation: text("operation").notNull(),
+  submissionKey: uuid("submission_key").notNull(),
+  result: jsonb("result").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull()
+}, (table) => ({
+  identity: uniqueIndex("create_submissions_identity_idx").on(table.businessId, table.operation, table.submissionKey)
+}));

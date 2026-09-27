@@ -28,6 +28,7 @@ export function QuoteBuilderForm({
   services,
   action
 }: QuoteBuilderFormProps) {
+  const [submissionKey] = useState(() => crypto.randomUUID());
   const [items, setItems] = useState<ItemRow[]>([
     { rowId: crypto.randomUUID(), service_id: services[0]?.id ?? "", quantity: 1 }
   ]);
@@ -71,6 +72,7 @@ export function QuoteBuilderForm({
 
   return (
     <form action={action} className="space-y-6">
+      <input type="hidden" name="submissionKey" value={submissionKey} />
       <input
         type="hidden"
         name="items"

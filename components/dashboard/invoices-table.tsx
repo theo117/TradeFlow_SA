@@ -165,6 +165,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
       )
     );
 
+    try {
     const result = await updateInvoiceStatus(invoiceId, "paid");
 
     if (result?.error) {
@@ -175,7 +176,14 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
       router.refresh();
     }
 
-    setPendingId(null);
+    
+    } catch {
+      setRows(snapshot);
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
   }
 
   async function handleDelete() {

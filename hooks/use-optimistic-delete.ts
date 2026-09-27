@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { startTransition, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { InlineToastState } from "@/components/feedback/inline-toast";
@@ -20,6 +22,7 @@ export function useOptimisticDelete<TItem extends { id: string }>({
   deleteAction: (formData: FormData) => Promise<DeleteResult | undefined>;
   formField: string;
 }) {
+  const router = useRouter();
   const [target, setTarget] = useState<TItem | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [toast, setToast] = useState<InlineToastState>(null);
@@ -35,6 +38,7 @@ export function useOptimisticDelete<TItem extends { id: string }>({
       setItems(nextItems);
     });
 
+    try {
     const formData = new FormData();
     formData.set(formField, target.id);
     const result = await deleteAction(formData);
@@ -46,8 +50,16 @@ export function useOptimisticDelete<TItem extends { id: string }>({
       setToast({ kind: "success", message: result?.message ?? "Item deleted" });
     }
 
-    setPendingId(null);
+    
     setTarget(null);
+    } catch {
+      setItems(snapshot);
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPendingId(null);
+      setTarget(null);
+    }
   }
 
   return {

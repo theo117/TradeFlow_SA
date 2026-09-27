@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { CalendarClock } from "lucide-react";
 import { createRecurringInvoiceTemplate } from "@/app/dashboard/recurring/actions";
 import { RecurringInvoicesTable } from "@/components/dashboard/recurring-invoices-table";
@@ -77,6 +78,7 @@ export default async function RecurringInvoicesPage({
           </div>
 
           <form action={createRecurringInvoiceTemplate} className="space-y-4">
+            <input type="hidden" name="submissionKey" value={randomUUID()} />
             <Field htmlFor="customerId" label="Customer">
               <Select id="customerId" name="customerId" required>
                 <option value="">Choose customer</option>

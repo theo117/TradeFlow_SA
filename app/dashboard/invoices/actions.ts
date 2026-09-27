@@ -1,5 +1,7 @@
 "use server";
 
+import { safeActionError, requireValidId } from "@/lib/action-errors";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
@@ -148,7 +150,7 @@ export async function convertQuoteToInvoice(formData: FormData) {
       );
     }
     if (error instanceof Error) {
-      redirect(`${redirectTo}?error=${encodeURIComponent(error.message)}`);
+      redirect(`${redirectTo}?error=${encodeURIComponent(safeActionError(error))}`);
     }
 
     throw error;
@@ -161,6 +163,7 @@ export async function updateInvoiceStatus(
 ) {
   const business = await requirePaidBusiness();
   try {
+    requireValidId(invoiceId);
     const status = invoiceStatusSchema.parse(nextStatus);
     if (status === "void") throw new Error("Use the void action to preserve the invoice audit trail");
     const updatedInvoice = await db.transaction(async (tx) => {
@@ -207,7 +210,7 @@ export async function updateInvoiceStatus(
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to update invoice"
+      message: safeActionError(error, "Unable to update invoice")
     };
   }
 }
@@ -219,6 +222,8 @@ export async function recordInvoiceReminder(
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(invoiceId);
+    if (!["email", "whatsapp"].includes(channel)) return { error: true, message: "Invalid reminder channel", delivery: "manual" as const };
     const invoice = await db.transaction(async (tx) => {
       const [current] = await tx.select({ id: invoices.id, customerId: invoices.customerId, status: invoices.status })
         .from(invoices).where(and(eq(invoices.businessId, business.id), eq(invoices.id, invoiceId))).for("update");
@@ -321,7 +326,7 @@ export async function recordInvoiceReminder(
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to prepare reminder",
+      message: safeActionError(error, "Unable to prepare reminder"),
       delivery: "manual" as const
     };
   }
@@ -331,6 +336,7 @@ export async function revokeInvoicePublicLinks(invoiceId: string) {
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(invoiceId);
     const revokedCount = await revokePublicShareTokens({
       businessId: business.id,
       documentType: "invoice",
@@ -353,9 +359,7 @@ export async function revokeInvoicePublicLinks(invoiceId: string) {
     return {
       error: true,
       message:
-        error instanceof Error
-          ? error.message
-          : "Unable to revoke public invoice links"
+        safeActionError(error, "Unable to revoke public invoice links")
     };
   }
 }
@@ -364,6 +368,7 @@ export async function deleteInvoice(invoiceId: string) {
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(invoiceId);
     const [deletedInvoice] = await db
       .delete(invoices)
       .where(
@@ -403,7 +408,7 @@ export async function deleteInvoice(invoiceId: string) {
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to delete invoice"
+      message: safeActionError(error, "Unable to delete invoice")
     };
   }
 }
@@ -412,6 +417,7 @@ export async function deleteInvoice(invoiceId: string) {
 export async function voidInvoice(invoiceId: string) {
   const business = await requirePaidBusiness();
   try {
+    requireValidId(invoiceId);
     if (!business.owner_id) throw new Error("An authenticated actor is required to void an invoice");
     const result = await db.transaction(async (tx) => {
       const [invoice] = await tx.select({
@@ -459,6 +465,6 @@ export async function voidInvoice(invoiceId: string) {
     revalidatePath(`/invoice/${invoiceId}`);
     return { error: false, message: result.changed ? "Invoice voided. It is no longer payable." : "Invoice already void", invoiceId };
   } catch (error) {
-    return { error: true, message: error instanceof Error ? error.message : "Unable to void invoice" };
+    return { error: true, message: safeActionError(error, "Unable to void invoice") };
   }
 }

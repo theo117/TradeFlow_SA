@@ -56,6 +56,7 @@ export const quoteItemSchema = z.object({
 });
 
 export const quoteSchema = z.object({
+  notes: z.string().max(10000).optional(),
   customerId: z.string().uuid(),
   status: z.enum(["draft", "sent"]),
   items: z.array(quoteItemSchema).min(1)

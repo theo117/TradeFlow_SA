@@ -40,7 +40,7 @@ export function assertProductionEnv() {
 
   // Required environment variables
   const missing = REQUIRED_PRODUCTION_ENV.filter(
-    (name) => !process.env[name]
+    (name) => !process.env[name]?.trim()
   );
 
   if (missing.length > 0) {
@@ -50,7 +50,7 @@ export function assertProductionEnv() {
   }
 
   // Optional email validation
-  const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
+  const EMAIL_ENABLED = isEmailEnabled();
   const BLOB_ENABLED = process.env.BLOB_ENABLED === "true";
 
   if (EMAIL_ENABLED) {
@@ -60,7 +60,7 @@ export function assertProductionEnv() {
     ];
 
     const missingEmail = emailVars.filter(
-      (name) => !process.env[name]
+      (name) => !process.env[name]?.trim()
     );
 
     if (missingEmail.length > 0) {
@@ -90,7 +90,7 @@ export function assertProductionEnv() {
     ];
 
     const missingBilling = billingVars.filter(
-      (name) => !process.env[name]
+      (name) => !process.env[name]?.trim()
     );
 
     if (missingBilling.length > 0) {
@@ -111,4 +111,19 @@ export function getDatabaseUrl() {
   }
 
   return "postgres://postgres:postgres@127.0.0.1:5432/tradeflow_sa";
+}
+
+// Explicit false wins; absent flags preserve credential-based delivery. A partial
+// configuration is considered enabled so startup rejects it instead of failing later.
+export function isEmailEnabled() {
+  if (process.env.EMAIL_ENABLED === "false") return false;
+  return process.env.EMAIL_ENABLED === "true" || Boolean(process.env.RESEND_API_KEY || process.env.EMAIL_FROM);
+}
+
+export function getEmailProviderConfig() {
+  if (!isEmailEnabled()) return null;
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const emailFrom = process.env.EMAIL_FROM?.trim();
+  if (resendApiKey && emailFrom) return { resendApiKey, emailFrom };
+  throw new Error("Email is enabled but RESEND_API_KEY or EMAIL_FROM is missing.");
 }

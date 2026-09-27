@@ -46,6 +46,7 @@ export function InvoiceDetailActions({
     setPending(nextStatus);
     setCurrentStatus(nextStatus);
 
+    try {
     const result = await updateInvoiceStatus(invoiceId, nextStatus);
 
     if (result?.error) {
@@ -56,7 +57,14 @@ export function InvoiceDetailActions({
       router.refresh();
     }
 
-    setPending(null);
+    
+    } catch {
+      setCurrentStatus(snapshot);
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleReminder(
@@ -68,11 +76,12 @@ export function InvoiceDetailActions({
     }
 
     setPending(channel);
+    try {
     const result = await recordInvoiceReminder(invoiceId, channel);
 
     if (result?.error) {
       setToast({ kind: "error", message: result.message });
-      setPending(null);
+      
       return;
     }
 
@@ -85,11 +94,19 @@ export function InvoiceDetailActions({
       window.location.assign(href);
     }
 
-    setPending(null);
+    
+    } catch {
+      
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleRevokeLinks() {
     setPending("revoke");
+    try {
     const result = await revokeInvoicePublicLinks(invoiceId);
 
     if (result?.error) {
@@ -99,7 +116,14 @@ export function InvoiceDetailActions({
       router.refresh();
     }
 
-    setPending(null);
+    
+    } catch {
+      
+      setToast({ kind: "error", message: "Unable to confirm this request. Please try again." });
+      router.refresh();
+    } finally {
+      setPending(null);
+    }
   }
 
   async function handleDelete() {
@@ -120,6 +144,7 @@ export function InvoiceDetailActions({
       router.refresh();
     } catch {
       setToast({ kind: "error", message: "Unable to confirm the result. Refresh or retry the operation." });
+      router.refresh();
     } finally {
       setPending(null);
       setConfirmDeleteOpen(false);

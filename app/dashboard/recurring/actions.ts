@@ -1,5 +1,9 @@
 "use server";
 
+import { safeActionError, requireValidId } from "@/lib/action-errors";
+
+import { createOnce } from "@/lib/create-submission";
+import { advanceRecurringDate } from "@/lib/recurring-dates";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -22,17 +26,6 @@ function addDays(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function advanceDate(
-  value: string,
-  frequency: "monthly" | "quarterly" | "annually"
-) {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  const months =
-    frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : 12;
-  date.setUTCMonth(date.getUTCMonth() + months);
-  return date.toISOString().slice(0, 10);
-}
-
 export async function createRecurringInvoiceTemplate(formData: FormData) {
   try {
     const business = await requirePaidBusiness();
@@ -46,7 +39,8 @@ export async function createRecurringInvoiceTemplate(formData: FormData) {
       paymentTermsDays: formData.get("paymentTermsDays")
     });
 
-    const [customer] = await db
+    const { result: template, created } = await createOnce(business.id, "recurring", formData.get("submissionKey"), async (tx) => {
+    const [customer] = await tx
       .select({ id: customers.id })
       .from(customers)
       .where(
@@ -61,7 +55,7 @@ export async function createRecurringInvoiceTemplate(formData: FormData) {
       redirect("/dashboard/recurring?error=Customer%20not%20found");
     }
 
-    const [template] = await db
+    const [template] = await tx
       .insert(recurringInvoiceTemplates)
       .values({
         businessId: business.id,
@@ -79,7 +73,10 @@ export async function createRecurringInvoiceTemplate(formData: FormData) {
         frequency: recurringInvoiceTemplates.frequency
       });
 
-    await logActivityEvent({
+      return template;
+    });
+
+    if (created) await logActivityEvent({
       businessId: business.id,
       customerId: template.customerId,
       type: "recurring_invoice.created",
@@ -101,7 +98,7 @@ export async function createRecurringInvoiceTemplate(formData: FormData) {
       );
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/recurring?error=${encodeURIComponent(error.message)}`);
+      redirect(`/dashboard/recurring?error=${encodeURIComponent(safeActionError(error))}`);
     }
 
     throw error;
@@ -115,6 +112,8 @@ export async function updateRecurringInvoiceTemplateStatus(
   const business = await requirePaidBusiness();
 
   try {
+    requireValidId(templateId);
+    if (!["active", "paused"].includes(status)) return { error: true, message: "Invalid recurring status" };
     const [template] = await db
       .update(recurringInvoiceTemplates)
       .set({ status })
@@ -148,9 +147,7 @@ export async function updateRecurringInvoiceTemplateStatus(
     return {
       error: true,
       message:
-        error instanceof Error
-          ? error.message
-          : "Unable to update recurring invoice"
+        safeActionError(error, "Unable to update recurring invoice")
     };
   }
 }
@@ -203,7 +200,7 @@ export async function createInvoiceFromRecurringTemplate(
       }
 
       const dueDate = addDays(template.nextInvoiceDate, template.paymentTermsDays);
-      const nextInvoiceDate = advanceDate(template.nextInvoiceDate, template.frequency);
+      const nextInvoiceDate = advanceRecurringDate(template.nextInvoiceDate, template.frequency, template.scheduleAnchorDate ?? template.nextInvoiceDate);
       // The unique template/period identity is the durable claim. It commits or
       // rolls back together with the invoice, items, and template advancement.
       const [invoice] = await tx
@@ -229,7 +226,7 @@ export async function createInvoiceFromRecurringTemplate(
 
       await tx
         .update(recurringInvoiceTemplates)
-        .set({ nextInvoiceDate })
+        .set({ nextInvoiceDate, scheduleAnchorDate: template.scheduleAnchorDate ?? template.nextInvoiceDate })
         .where(and(
           eq(recurringInvoiceTemplates.businessId, business.id),
           eq(recurringInvoiceTemplates.id, template.id)
@@ -262,9 +259,7 @@ export async function createInvoiceFromRecurringTemplate(
     return {
       error: true,
       message:
-        error instanceof Error
-          ? error.message
-          : "Unable to create recurring invoice"
+        safeActionError(error, "Unable to create recurring invoice")
     };
   }
 }

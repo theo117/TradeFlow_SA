@@ -1,5 +1,8 @@
 "use server";
 
+import { safeActionError, requireValidId } from "@/lib/action-errors";
+
+import { createOnce } from "@/lib/create-submission";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -19,11 +22,15 @@ export async function createService(formData: FormData) {
       price: formData.get("price")
     });
 
-    await db.insert(services).values({
+    await createOnce(business.id, "service", formData.get("submissionKey"), async (tx) => {
+    const [service] = await tx.insert(services).values({
       businessId: business.id,
       name: payload.name,
       description: payload.description || null,
       price: payload.price
+    }).returning({ id: services.id });
+
+      return service;
     });
 
     revalidatePath("/dashboard/services");
@@ -36,7 +43,7 @@ export async function createService(formData: FormData) {
       redirect(`/dashboard/services/new?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/services/new?error=${encodeURIComponent(error.message)}`);
+      redirect(`/dashboard/services/new?error=${encodeURIComponent(safeActionError(error))}`);
     }
     throw error;
   }
@@ -44,6 +51,7 @@ export async function createService(formData: FormData) {
 
 export async function updateService(serviceId: string, formData: FormData) {
   try {
+    requireValidId(serviceId);
     const business = await requirePaidBusiness();
     const payload = serviceSchema.parse({
       name: formData.get("name"),
@@ -75,7 +83,7 @@ export async function updateService(serviceId: string, formData: FormData) {
       redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.issues[0]?.message ?? "Invalid form values")}`);
     }
     if (error instanceof Error) {
-      redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(error.message)}`);
+      redirect(`/dashboard/services/${serviceId}/edit?error=${encodeURIComponent(safeActionError(error))}`);
     }
     throw error;
   }
@@ -86,6 +94,7 @@ export async function deleteService(formData: FormData) {
   const serviceId = String(formData.get("serviceId"));
 
   try {
+    requireValidId(serviceId);
     const [deletedService] = await db
       .delete(services)
       .where(and(eq(services.businessId, business.id), eq(services.id, serviceId)))
@@ -107,7 +116,7 @@ export async function deleteService(formData: FormData) {
   } catch (error) {
     return {
       error: true,
-      message: error instanceof Error ? error.message : "Unable to delete service"
+      message: safeActionError(error, "Unable to delete service")
     };
   }
 }

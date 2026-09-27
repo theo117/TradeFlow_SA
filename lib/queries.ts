@@ -1,3 +1,4 @@
+import { validId } from "@/lib/action-errors";
 import { cache } from "react";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { requirePaidBusiness } from "@/lib/auth";
@@ -359,6 +360,7 @@ export const getCustomers = cache(async () => {
 
 export const getCustomerById = cache(async (id: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(id)) return null;
 
   const [row] = await db
     .select()
@@ -371,6 +373,7 @@ export const getCustomerById = cache(async (id: string) => {
 
 export const getCustomerActivity = cache(async (id: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(id)) return [];
 
   const rows = await db
     .select()
@@ -396,6 +399,7 @@ export const getCustomerActivity = cache(async (id: string) => {
 
 export const getCustomerDetail = cache(async (id: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(id)) return null;
   await syncOverdueInvoices(business.id);
 
   const customer = await getCustomerById(id);
@@ -508,6 +512,7 @@ export const getRecurringInvoiceTemplates = cache(async () => {
 
 export const getServiceById = cache(async (id: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(id)) return null;
 
   const [row] = await db
     .select()
@@ -679,15 +684,22 @@ async function getQuoteDetail(whereClause: ReturnType<typeof and> | ReturnType<t
 
 export const getQuoteById = cache(async (id: string) => {
   const business = await requirePaidBusiness();
-  return getQuoteDetail(and(eq(quotes.businessId, business.id), eq(quotes.id, id)));
+  if (!validId(id)) return null;
+  const detail = await getQuoteDetail(and(eq(quotes.businessId, business.id), eq(quotes.id, id)));
+  if (!detail) return null;
+  const [privateFields] = await db.select({ internalNotes: quotes.internalNotes }).from(quotes)
+    .where(and(eq(quotes.businessId, business.id), eq(quotes.id, id)));
+  return { ...detail, internal_notes: privateFields.internalNotes };
 });
 
 export const getPublicQuoteById = cache(async (id: string) => {
+  if (!validId(id)) return null;
   return getQuoteDetail(eq(quotes.id, id));
 });
 
 export const getInvoiceByQuoteId = cache(async (quoteId: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(quoteId)) return null;
   await syncOverdueInvoices(business.id);
 
   const [row] = await db
@@ -889,11 +901,13 @@ async function getInvoiceDetail(
 
 export const getInvoiceById = cache(async (id: string) => {
   const business = await requirePaidBusiness();
+  if (!validId(id)) return null;
   await syncOverdueInvoices(business.id);
 
   return getInvoiceDetail(and(eq(invoices.businessId, business.id), eq(invoices.id, id)));
 });
 
 export const getPublicInvoiceById = cache(async (id: string) => {
+  if (!validId(id)) return null;
   return getInvoiceDetail(eq(invoices.id, id), true);
 });
