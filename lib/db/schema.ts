@@ -44,6 +44,7 @@ export const users = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
+    sessionVersion: integer("session_version").default(0).notNull(),
     emailVerifiedAt: timestamp("email_verified_at", {
       withTimezone: true,
       mode: "string"

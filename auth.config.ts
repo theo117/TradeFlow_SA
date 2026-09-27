@@ -1,7 +1,4 @@
 import type { NextAuthConfig } from "next-auth";
-import { assertProductionEnv } from "@/lib/env";
-
-
 
 const authConfig = {
   secret: process.env.AUTH_SECRET,
@@ -17,6 +14,7 @@ const authConfig = {
     jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
 
       return token;

@@ -10,6 +10,8 @@ export default defineConfig({
     }
   },
   test: {
+    // Auth.js uses Next.js extensionless imports; let Vite resolve them in real-auth tests.
+    server: { deps: { inline: ["next-auth"] } },
     pool: "threads",
     maxWorkers: 1
   }

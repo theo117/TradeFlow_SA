@@ -116,6 +116,8 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     expect(enums).toEqual(Object.keys(snapshot.enums).sort());
     expect((await query(url, "SELECT table_name,data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND column_name='document_snapshot' ORDER BY table_name")).rows)
       .toEqual(["invoices", "quotes"].map((table_name) => ({ table_name, data_type: "jsonb", is_nullable: "YES", column_default: null })));
+    expect((await query(url, "SELECT data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='session_version'")).rows)
+      .toEqual([{ data_type: "integer", is_nullable: "NO", column_default: "0" }]);
     expect(await sequence(url)).toEqual([{ last_value: "1000", is_called: false }]);
     await seed(url);
     expect((await query(url, "SELECT invoice_number FROM invoices")).rows).toEqual([{ invoice_number: "INV-001000" }]);
@@ -152,6 +154,7 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     expect((await query(url, "SELECT hash,created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at")).rows)
       .toEqual([{ hash: INITIAL_MIGRATION_HASH, created_at: String(INITIAL_MIGRATION_TIME) }]);
     expect((await migrate(url)).code).toBe(0);
+    expect((await query(url, "SELECT session_version FROM users")).rows).toEqual([{ session_version: 0 }]);
     expect((await query(url, "SELECT recurring_template_id,recurring_period FROM invoices")).rows)
       .toEqual([{ recurring_template_id: null, recurring_period: null }]);
     for (const table of ["invoices", "quotes"]) {
@@ -166,6 +169,36 @@ describe.skipIf(!adminUrl)("production migrations (disposable PostgreSQL 17)", (
     const inserted = await query(url, `INSERT INTO invoices(business_id,customer_id,total,due_date)
       VALUES ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',10,'2030-01-02') RETURNING invoice_number`);
     expect(inserted.rows[0].invoice_number).toBe(called ? "INV-054322" : "INV-054321");
+  }, 30000);
+
+  it("upgrades tracked H11 auth data with version zero and no credential/token rewrite", async () => {
+    const url = await database();
+    const fixture = await mkdtemp(path.join(tmpdir(), "tradeflow-h14-upgrade-"));
+    directories.push(fixture);
+    await mkdir(path.join(fixture, "scripts"));
+    for (const file of ["package.json", "scripts/migrate.ts", "scripts/migration-support.ts"])
+      await cp(path.join(root, file), path.join(fixture, file));
+    await cp(path.join(root, "drizzle"), path.join(fixture, "drizzle"), { recursive: true });
+    await symlink(path.join(root, "node_modules"), path.join(fixture, "node_modules"), "dir");
+    const journalPath = path.join(fixture, "drizzle/meta/_journal.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 4);
+    await writeFile(journalPath, JSON.stringify(journal));
+    expect((await migrate(url, [], fixture)).code).toBe(0);
+    await seed(url);
+    await query(url, `INSERT INTO password_reset_tokens(user_id,token_hash,expires_at)
+      VALUES ('00000000-0000-0000-0000-000000000001','synthetic-h14-migration-token','2099-01-01');`);
+    const before = await rows(url);
+    const userTransaction = (await query(url, "SELECT xmin::text FROM users")).rows;
+    const position = await sequence(url);
+    const upgraded = await migrate(url);
+    expect(upgraded.code).toBe(0); expect(upgraded.output).toContain("1 applied");
+    expect((await query(url, "SELECT session_version FROM users")).rows).toEqual([{ session_version: 0 }]);
+    expect(await rows(url)).toEqual(before);
+    expect((await query(url, "SELECT xmin::text FROM users")).rows).toEqual(userTransaction);
+    expect(await sequence(url)).toEqual(position);
+    expect((await migrate(url)).output).toContain("0 applied");
+    expect(await rows(url)).toEqual(before);
   }, 30000);
 
   it("refuses a mismatched schema without writing baseline history", async () => {

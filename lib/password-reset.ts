@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { passwordResetTokens, users } from "@/lib/db/schema";
 import { logInfo } from "@/lib/observability";
@@ -105,47 +105,47 @@ export async function resetPasswordWithToken({
   password: string;
 }) {
   const tokenHash = hashToken(token);
-  const [resetToken] = await db
-    .select()
-    .from(passwordResetTokens)
-    .where(
-      and(
+  return db.transaction(async (tx) => {
+    // Serialize resets for an account before claiming any token. This also
+    // prevents competing tokens from deadlocking when all are invalidated.
+    const [account] = await tx.select({ id: users.id }).from(users)
+      .innerJoin(passwordResetTokens, eq(passwordResetTokens.userId, users.id))
+      .where(eq(passwordResetTokens.tokenHash, tokenHash))
+      .for("update", { of: users });
+    if (!account) return { ok: false, reason: "invalid" as const };
+
+    // Eligibility is checked at claim time, including after any lock wait.
+    // clock_timestamp() does not freeze at the transaction's start time.
+    const [claimed] = await tx.update(passwordResetTokens)
+      .set({ usedAt: sql`clock_timestamp()` })
+      .where(and(
         eq(passwordResetTokens.tokenHash, tokenHash),
-        isNull(passwordResetTokens.usedAt)
-      )
-    )
-    .limit(1);
+        eq(passwordResetTokens.userId, account.id),
+        isNull(passwordResetTokens.usedAt),
+        sql`${passwordResetTokens.expiresAt} >= clock_timestamp()`
+      ))
+      .returning({ userId: passwordResetTokens.userId, usedAt: passwordResetTokens.usedAt });
 
-  if (!resetToken) {
-    return { ok: false, reason: "invalid" as const };
-  }
+    if (!claimed) {
+      const [candidate] = await tx.select({
+        usedAt: passwordResetTokens.usedAt,
+        expired: sql<boolean>`${passwordResetTokens.expiresAt} < clock_timestamp()`
+      }).from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash));
+      return { ok: false, reason: candidate && !candidate.usedAt && candidate.expired ? "expired" as const : "invalid" as const };
+    }
 
-  if (new Date(resetToken.expiresAt).getTime() < Date.now()) {
-    return { ok: false, reason: "expired" as const };
-  }
+    const passwordHash = await hashPassword(password);
+    await tx.update(users).set({
+      passwordHash,
+      emailVerifiedAt: new Date().toISOString(),
+      sessionVersion: sql`${users.sessionVersion} + 1`
+    }).where(eq(users.id, claimed.userId));
 
-  const now = new Date().toISOString();
-  const passwordHash = await hashPassword(password);
+    // Preserve the existing policy: successful recovery invalidates this user's
+    // other unused recovery tokens too, without affecting another account.
+    await tx.update(passwordResetTokens).set({ usedAt: claimed.usedAt })
+      .where(and(eq(passwordResetTokens.userId, claimed.userId), isNull(passwordResetTokens.usedAt)));
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(users)
-      .set({
-        passwordHash,
-        emailVerifiedAt: now
-      })
-      .where(eq(users.id, resetToken.userId));
-
-    await tx
-      .update(passwordResetTokens)
-      .set({ usedAt: now })
-      .where(
-        and(
-          eq(passwordResetTokens.userId, resetToken.userId),
-          isNull(passwordResetTokens.usedAt)
-        )
-      );
+    return { ok: true, reason: "reset" as const, userId: claimed.userId };
   });
-
-  return { ok: true, reason: "reset" as const, userId: resetToken.userId };
 }

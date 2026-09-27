@@ -254,6 +254,62 @@ DOCUMENT_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h11_test_admin \
   npm test -- tests/document-snapshots.test.ts
 ```
 
+## Password recovery and Auth.js session revocation (H14)
+
+Migration `0004_user_session_version.sql` adds `users.session_version`, an integer
+with default zero and NOT NULL. It changes no password, verification timestamp,
+reset-token row or prior migration. Apply the migration before the new application
+code using the existing production migration command. Existing untracked canonical
+installations must use the documented explicit baseline path first.
+
+Recovery locks the token's user inside the password-change transaction, then
+conditionally claims the specific hashed token only if unused and unexpired.
+Expiry is tested with PostgreSQL `clock_timestamp()` after waiting for the lock;
+transaction-start time cannot extend token eligibility. Only a successful claim
+can proceed to bcrypt hashing/password persistence and increment `session_version`.
+The existing one-hour token lifetime, bcrypt cost 12, reset email-verification
+behavior and invalidation of the user's other outstanding recovery tokens remain.
+All writes commit or roll back together. Other users are unaffected.
+
+Credentials login records the session version read alongside the password hash.
+Every server-side Auth.js JWT callback checks that version against the current
+user row, including direct `auth()` calls and the session API. A mismatch or missing
+user returns no session. A login that verified an old password while reset was
+committing cannot acquire a newer version by reading it later. Session refresh
+never upgrades an old token or trusts a client-submitted version.
+
+Existing JWTs without a version are treated as version zero. Rollout alone does
+not sign out existing users. A successful reset increments only that account's
+version, invalidating all its older Auth.js sessions on subsequent server checks;
+new-password login receives the new version. Existing session lifetime and logout
+cookie behavior remain unchanged. Unverified users still fail `requireUser` until
+verified; password reset retains the existing verification behavior.
+
+The Edge middleware remains a preliminary cryptographic cookie check without a
+PostgreSQL connection. Protected dashboard pages/actions use server guards, and
+protected APIs use the server `auth()` path; these enforce revocation. Public share
+tokens remain independent of account login, with their existing access rules.
+Already-authorized in-flight requests are not retroactively cancelled. Each
+server-side authenticated session check adds one indexed user lookup and fails
+closed if it cannot validate against the database.
+
+Complete rollout across all Next.js instances before relying on revocation; old
+application instances do not perform the version check. There is no forced global
+logout or retrospective reconstruction of password-change history. No production
+user-data correction is required for this migration.
+
+The inspected Next.js frontend does not use the separate Java bearer-token login
+or validation path. Java code is unchanged; this change revokes Auth.js sessions,
+not independently issued Java bearer tokens.
+
+Disposable PostgreSQL 17 integration tests use real Auth.js credentials handlers,
+CSRF checks, encrypted cookies, session callbacks, bcrypt and protected route guards:
+
+```bash
+RESET_TEST_ADMIN_URL=postgres://USER:PASSWORD@127.0.0.1:PORT/h14_test_admin \
+  npm test -- tests/password-reset-integration.test.ts
+```
+
 ## Monitoring
 
 Configure alerts for:

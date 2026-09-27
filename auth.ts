@@ -9,6 +9,19 @@ import { users } from "@/lib/db/schema";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt(args) {
+      const token = authConfig.callbacks.jwt(args);
+      if (!token.sub) return null;
+      const [user] = await db.select({ sessionVersion: users.sessionVersion }).from(users)
+        .where(eq(users.id, token.sub)).limit(1);
+      // Missing claims belong to pre-migration sessions (version zero). Never
+      // refresh an old session into the current version after a password reset.
+      if (!user || (token.sessionVersion ?? 0) !== user.sessionVersion) return null;
+      return token;
+    }
+  },
   providers: [
     Credentials({
       credentials: {
@@ -27,7 +40,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .select({
             id: users.id,
             email: users.email,
-            passwordHash: users.passwordHash
+            passwordHash: users.passwordHash,
+            sessionVersion: users.sessionVersion
           })
           .from(users)
           .where(eq(users.email, email))
@@ -48,7 +62,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         return {
           id: user.id,
-          email: user.email
+          email: user.email,
+          sessionVersion: user.sessionVersion
         };
       }
     })
