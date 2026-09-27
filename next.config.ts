@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/api/invoices/*/pdf": ["./lib/pdf/fonts/**/*"],
+    "/api/quotes/*/pdf": ["./lib/pdf/fonts/**/*"]
+  },
   async headers() {
     return [
       {
